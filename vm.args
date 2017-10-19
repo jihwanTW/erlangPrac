@@ -1,0 +1,7 @@
+-pa ./ebin
+-pa ./deps/cowboy/ebin
+-pa ./deps/cowlib/ebin
+-pa ./deps/ranch/ebin
+-setcookie abcd
+-eval "application:start(erlangPrac)"
+-sname node1

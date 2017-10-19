@@ -1,0 +1,19 @@
+%%%-------------------------------------------------------------------
+%%% @author Twinny-KJH
+%%% @copyright (C) 2017, <COMPANY>
+%%% @doc
+%%%
+%%% @end
+%%% Created : 20. 10월 2017 오전 12:48
+%%%-------------------------------------------------------------------
+{application, erlangPrac, [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+    kernel,
+    stdlib
+  ]},
+  {mod, {erlangPrac_app, []}},
+  {env, []}
+]}.
