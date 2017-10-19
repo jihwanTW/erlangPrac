@@ -40,6 +40,8 @@ start(_StartType, _StartArgs) ->
   ok = application:start(cowlib),
   ok = application:start(ranch),
   ok = application:start(cowboy),
+  crypto:start(),
+  application:start(emysql),
 
   %% Cowboy의 Router를 설정함
   Dispatch = cowboy_router:compile([

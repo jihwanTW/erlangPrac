@@ -51,11 +51,36 @@ handle(<<"calculate">>,<<"sum">>,_,Data)->
   SumList = proplists:get_value(<<"sumList">>,Data),
   <<"{\"result\":\"error2222\"}">>;
 %%  io:format("value = ~p ~n",[func(sum, SumList)]);
+handle(<<"mysql">>,<<"connect">>,_,Data)->
+  run();
 handle(_,_,_,_)->
   <<"{\"result\":\"error\"}">>.
 
 
 func(sum,[])->0 ;
 func(sum,[H|T])->H+func(sum,T).
+
+
+%% emysql 연습
+run() ->
+  emysql:add_pool(
+    hello_pool,
+    [{size,1},
+      {user,"root"},
+      {password,"jhkim1020"},
+      {database,"hello_database"},
+      {encoding,utf8}
+    ]),
+
+  emysql:execute(hello_pool, <<"INSERT INTO hello_table SET hello_text = 'Hello World!">>),
+
+  Result=emysql:execute(hello_pool,
+    <<"select hello_text from hello_table">>),
+
+  JSON = emysql_util:as_json(Result),
+  io:format("~n~p~n",[JSON]),
+  A = 54,
+  <<" ERROR : JSON ",A," Value","C">>.
+
 
 terminate(_Reason,_Req,_State)->ok.
