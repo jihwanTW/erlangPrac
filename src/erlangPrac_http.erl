@@ -24,6 +24,9 @@ handle(Req,State)->
   {ok,Data,Req4} = cowboy_req:body_qs(Req3),
   io:format("api=~p, what=~p,opt=~p id=~p pw=~p ~n",[Api,What,Opt,proplists:get_value(<<"id">>,Data),proplists:get_value(<<"pw">>,Data)]),
 
+  %% 디비풀 생성.
+  connect_db(),
+
   Reply = handle(Api,What,Opt,Data),
 
   {ok,Req5} = cowboy_req:reply(200,[
@@ -40,26 +43,41 @@ handle(<<"login">>,_,_,Data)->
     _ ->
       <<"{\"result\":\"fail\"}">>
   end;
-handle(<<"join">>,_,_,Data) ->
-Id=proplists:get_value(<<"id">>,Data),
-Password=proplists:get_value(<<"pw">>,Data),
-  dets:insert(users_list,{Id,Password}),
-<<"{\"result\':\"join\"}">>;
-handle(<<"hello">>,<<"world">>,_,_)->
-  <<"{\"result\":\"Hello World\"}">>;
-handle(<<"calculate">>,<<"sum">>,_,Data)->
-  SumList = proplists:get_value(<<"sumList">>,Data),
-  <<"{\"result\":\"error2222\"}">>;
-%%  io:format("value = ~p ~n",[func(sum, SumList)]);
+handle(<<"chatting">>,<<"register">>,_,Data) ->
+  register_user(Data);
 handle(<<"mysql">>,<<"connect">>,_,Data)->
   run();
 handle(_,_,_,_)->
   <<"{\"result\":\"error\"}">>.
 
+%% 유저 가입시키기
+register_user(Data)->
+  %% Data에 id,pw,email,nickname이 모두 존재하는지 여부 조회해야함.
 
-func(sum,[])->0 ;
-func(sum,[H|T])->H+func(sum,T).
+  %% 아이디 비밀번호 변수에 저장.
+  Name=proplists:get_value(<<"name">>,Data),
+  Email=proplists:get_value(<<"email">>,Data),
+  Nickname=proplists:get_value(<<"nickname">>,Data),
 
+  %% 디비에 데이터 추가.
+  %% TODO : 중복체크하기. (email,nickname)
+%%   emysql:execute(chatting_db,<<"INSERT INTO user key (name,email,nickname) values('",Name,"','",Email,"','",Nickname,"')">>),
+  emysql:prepare(register_user,<<"INSERT INTO user key (name,email,nickname) values('?','?','?')">>),
+  emysql:execute(chatting_db,register_user,[Name,Email,Nickname]),
+  <<"REGISTER USER -NAME : ",Name," -Email : ",Email," -Nickname : ",Nickname>>
+  .
+
+
+%% 디비에 연결하여 db pool 생성하기.
+connect_db()->
+  emysql:add_pool(
+    chatting_db,
+    [{size,1},
+      {user,"root"},
+      {password,"jhkim1020"},
+      {database,"erlangprac_chatingdb"},
+      {encoding,utf8}
+    ]).
 
 %% emysql 연습
 run() ->
@@ -71,8 +89,12 @@ run() ->
       {database,"hello_database"},
       {encoding,utf8}
     ]),
+  emysql:prepare(my_stmt,<<"SELECT * from hello_table WHERE idx = ?">>),
+  Result1 = emysql:execute(hello_pool, my_stmt, [1]),
+  JSON1 = emysql_util:as_json(Result1),
+  io:format("JOSN1 RESULT : ~n~p~n",[JSON1]),
 
-  emysql:execute(hello_pool, <<"INSERT INTO hello_table SET hello_text = 'Hello World!">>),
+  emysql:execute(hello_pool, <<"INSERT INTO hello_table SET hello_text = 'Hello World!'">>),
 
   Result=emysql:execute(hello_pool,
     <<"select hello_text from hello_table">>),
@@ -81,6 +103,8 @@ run() ->
   io:format("~n~p~n",[JSON]),
   A = 54,
   <<" ERROR : JSON ",A," Value","C">>.
+
+
 
 
 terminate(_Reason,_Req,_State)->ok.
