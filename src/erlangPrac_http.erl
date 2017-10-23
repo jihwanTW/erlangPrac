@@ -43,10 +43,14 @@ handle(<<"login">>,_,_,Data)->
     _ ->
       <<"{\"result\":\"fail\"}">>
   end;
-handle(<<"chatting">>,<<"register">>,_,Data) ->
+handle(<<"user">>,<<"register">>,_,Data) ->
   register_user(Data);
-handle(<<"mysql">>,<<"connect">>,_,Data)->
-  run();
+handle(<<"user">>,<<"update">>,_,Data) ->
+  update_user(Data);
+handle(<<"user">>,<<"send_dialog">>,_,Data) ->
+  send_dialog(Data);
+handle(<<"chatting">>,<<"view">>,_,Data) ->
+  view_dialog(Data);
 handle(_,_,_,_)->
   <<"{\"result\":\"error\"}">>.
 
@@ -58,15 +62,65 @@ register_user(Data)->
   Name=proplists:get_value(<<"name">>,Data),
   Email=proplists:get_value(<<"email">>,Data),
   Nickname=proplists:get_value(<<"nickname">>,Data),
+  io:format("name = ~p , ~p , ~p ~n",[Name,Email,Nickname]),
 
-  %% 디비에 데이터 추가.
-  %% TODO : 중복체크하기. (email,nickname)
-%%   emysql:execute(chatting_db,<<"INSERT INTO user key (name,email,nickname) values('",Name,"','",Email,"','",Nickname,"')">>),
-  emysql:prepare(register_user,<<"INSERT INTO user key (name,email,nickname) values('?','?','?')">>),
-  emysql:execute(chatting_db,register_user,[Name,Email,Nickname]),
-  <<"REGISTER USER -NAME : ",Name," -Email : ",Email," -Nickname : ",Nickname>>
+  %% 중복체크
+  emysql:prepare(register_user,<<"SELECT * FROM user WEHRE name=? or email=? ">>),
+  Result = emysql:execute(chatting_db,register_user,[Name,Email]),
+  case Result of
+    [] ->
+      %% 디비에 데이터 추가.
+      emysql:prepare(register_user,<<"INSERT INTO user (name,email,nickname) values(?, ?, ?)">>),
+      emysql:execute(chatting_db,register_user,[Name,Email,Nickname]),
+    <<"{\"result\":\"Register\"}">>;
+    _ ->
+      %%
+      <<"{\"result\":\"Duplicate\"}">>
+  end.
+
+%% 유저 정보변경
+update_user(Data)->
+  Idx = proplists:get_value(<<"idx">>,Data),
+  Email = proplists:get_value(<<"email">>,Data),
+  Nickname = proplists:get_value(<<"nickname">>,Data),
+  emysql:prepare(update_user,<<"UPDATE user SET email=?, nickname=? WHERE idx=?">>),
+  Result = emysql:execute(chatting_db,update_user,[Email,Nickname,Idx]),
+  %% 성공여부 반환
+  case Result of
+    [] ->
+      <<"{\"result\":\"does not exist\"}">>;
+    _ ->
+      <<"{\"result\":\"Change Data\"}">>
+  end.
+
+%% 대화보내기
+send_dialog(Data)->
+  User_idx = proplists:get_value(<<"user_idx">>,Data),
+  Room_idx = proplists:get_value(<<"room_idx">>,Data),
+  Dialog = proplists:get_value(<<"dialog">>,Data),
+  emysql:prepare(insert_dialog,<<"INSERT INTO dialog (room_idx,user_idx,user_dialog,date_time) values(?, ?, ?,now())">>),
+  emysql:execute(chatting_db,insert_dialog,[User_idx,Room_idx,Dialog]),
+  <<"send dialog">>.
+
+
+%% 대화 조회
+%% TODO : 방이 존재하는지여부. 방에 내가 존재하는지 여부
+view_dialog(Data)->
+  User_idx = proplists:get_value(<<"user_idx">>,Data),
+  Room_idx = proplists:get_value(<<"room_idx">>,Data),
+  emysql:prepare(view_dialog,<<"SELECT * FROM dialog WHERE room_idx=?">>),
+  Result = emysql:execute(chatting_db,view_dialog,[Room_idx]),
+  ViewDialogJson = emysql_util:as_json(Result),
+  print_views(ViewDialogJson),
+  <<"chatting END">>
   .
 
+
+print_views([H|T])->
+  Dialog = proplists:get_value(<<"user_dialog">>,H),
+  io:format("value = ~p ~n",[Dialog]),
+  print_views(T);
+print_views([])->io:format(<<"dialog end">>).
 
 %% 디비에 연결하여 db pool 생성하기.
 connect_db()->
@@ -75,7 +129,7 @@ connect_db()->
     [{size,1},
       {user,"root"},
       {password,"jhkim1020"},
-      {database,"erlangprac_chatingdb"},
+      {database,"erlangprac_chattingdb"},
       {encoding,utf8}
     ]).
 
