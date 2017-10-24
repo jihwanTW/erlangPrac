@@ -62,20 +62,19 @@ register_user(Data)->
   Name=proplists:get_value(<<"name">>,Data),
   Email=proplists:get_value(<<"email">>,Data),
   Nickname=proplists:get_value(<<"nickname">>,Data),
-  io:format("name = ~p , ~p , ~p ~n",[Name,Email,Nickname]),
 
   %% 중복체크
-  emysql:prepare(register_user,<<"SELECT * FROM user WEHRE name=? or email=? ">>),
-  Result = emysql:execute(chatting_db,register_user,[Name,Email]),
+  emysql:prepare(check_user,<<"SELECT * FROM user WHERE name=? or email=? ">>),
+  {_,_,_,Result,_} = emysql:execute(chatting_db,check_user,[Name,Email]),
   case Result of
     [] ->
       %% 디비에 데이터 추가.
-      emysql:prepare(register_user,<<"INSERT INTO user (name,email,nickname) values(?, ?, ?)">>),
+      emysql:prepare(register_user,<<"INSERT INTO user (name,email,nickname,date_time) values(?, ?, ?, now())">>),
       emysql:execute(chatting_db,register_user,[Name,Email,Nickname]),
-    <<"{\"result\":\"Register\"}">>;
+      jsx:encode([{<<"result">>,<<"Register">>}]);
     _ ->
       %%
-      <<"{\"result\":\"Duplicate\"}">>
+      jsx:encode([{<<"result">>,<<"Duplicate">>}])
   end.
 
 %% 유저 정보변경
@@ -88,39 +87,42 @@ update_user(Data)->
   %% 성공여부 반환
   case Result of
     [] ->
-      <<"{\"result\":\"does not exist\"}">>;
+      jsx:encode([{<<"result">>,<<"does not exist">>}]);
     _ ->
-      <<"{\"result\":\"Change Data\"}">>
+      jsx:encode([{<<"result">>,<<"Change Data">>}])
   end.
 
 %% 대화보내기
+%% TODO : 방이 존재하는지 여부 . 방에 유저가 존재하는지 여부. ( 단체방일경우 )
 send_dialog(Data)->
   User_idx = proplists:get_value(<<"user_idx">>,Data),
   Room_idx = proplists:get_value(<<"room_idx">>,Data),
   Dialog = proplists:get_value(<<"dialog">>,Data),
   emysql:prepare(insert_dialog,<<"INSERT INTO dialog (room_idx,user_idx,user_dialog,date_time) values(?, ?, ?,now())">>),
   emysql:execute(chatting_db,insert_dialog,[User_idx,Room_idx,Dialog]),
-  <<"send dialog">>.
+  jsx:encode([{<<"result">>,<<"send dialog">>}]).
 
 
-%% 대화 조회
-%% TODO : 방이 존재하는지여부. 방에 내가 존재하는지 여부
+%% 대화 조회 .
+%% TODO : 방이 존재하는지여부. 방에 내가 존재하는지 여부 // 현재 대화가 어디까지 갱신되었나 여부 확인후, 조회
 view_dialog(Data)->
   User_idx = proplists:get_value(<<"user_idx">>,Data),
   Room_idx = proplists:get_value(<<"room_idx">>,Data),
-  emysql:prepare(view_dialog,<<"SELECT * FROM dialog WHERE room_idx=?">>),
-  Result = emysql:execute(chatting_db,view_dialog,[Room_idx]),
+  Read_idx = proplists:get_value(<<"read_idx">>,Data),
+  emysql:prepare(view_dialog,<<"SELECT * FROM dialog WHERE room_idx=? and idx > ?">>),
+  Result = emysql:execute(chatting_db,view_dialog,[Room_idx,Read_idx]),
   ViewDialogJson = emysql_util:as_json(Result),
-  print_views(ViewDialogJson),
-  <<"chatting END">>
+%%  print_views(ViewDialogJson),
+  io:format(<<"view Dialog ~n">>),
+  jsx:encode(ViewDialogJson)
   .
 
-
-print_views([H|T])->
-  Dialog = proplists:get_value(<<"user_dialog">>,H),
-  io:format("value = ~p ~n",[Dialog]),
-  print_views(T);
-print_views([])->io:format(<<"dialog end">>).
+%%print_views([H|T])->
+%%  Dialog = proplists:get_value(<<"user_dialog">>,H),
+%%  io:format(jsx:encode(H)),
+%%  io:format("~n"),
+%%  print_views(T);
+%%print_views([])->io:format(jsx:encode([{<<"result">>,<<"view dialog end">>}])).
 
 %% 디비에 연결하여 db pool 생성하기.
 connect_db()->
@@ -132,33 +134,6 @@ connect_db()->
       {database,"erlangprac_chattingdb"},
       {encoding,utf8}
     ]).
-
-%% emysql 연습
-run() ->
-  emysql:add_pool(
-    hello_pool,
-    [{size,1},
-      {user,"root"},
-      {password,"jhkim1020"},
-      {database,"hello_database"},
-      {encoding,utf8}
-    ]),
-  emysql:prepare(my_stmt,<<"SELECT * from hello_table WHERE idx = ?">>),
-  Result1 = emysql:execute(hello_pool, my_stmt, [1]),
-  JSON1 = emysql_util:as_json(Result1),
-  io:format("JOSN1 RESULT : ~n~p~n",[JSON1]),
-
-  emysql:execute(hello_pool, <<"INSERT INTO hello_table SET hello_text = 'Hello World!'">>),
-
-  Result=emysql:execute(hello_pool,
-    <<"select hello_text from hello_table">>),
-
-  JSON = emysql_util:as_json(Result),
-  io:format("~n~p~n",[JSON]),
-  A = 54,
-  <<" ERROR : JSON ",A," Value","C">>.
-
-
 
 
 terminate(_Reason,_Req,_State)->ok.
