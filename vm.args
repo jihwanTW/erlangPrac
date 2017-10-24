@@ -3,6 +3,7 @@
 -pa ./deps/cowlib/ebin
 -pa ./deps/ranch/ebin
 -pa ./deps/emysql/ebin
+-pa ./deps/jsx/ebin
 
 -setcookie abcd
 -eval "application:start(erlangPrac)"
