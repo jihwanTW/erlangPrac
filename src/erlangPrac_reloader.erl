@@ -38,7 +38,7 @@ check(From,To,Module,Filename)->
   end.
 
 reload(Module)->
-  io:format("Reloading ~p ...",[Module]),
+  io:format("~nReloading ~p ...",[Module]),
   code:purge(Module),
   code:load_file(Module),
   io:format(" ok. ~n").
