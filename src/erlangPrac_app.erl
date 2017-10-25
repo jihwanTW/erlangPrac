@@ -40,8 +40,20 @@ start(_StartType, _StartArgs) ->
   ok = application:start(cowlib),
   ok = application:start(ranch),
   ok = application:start(cowboy),
+
+  %% emysql 로딩
   crypto:start(),
   application:start(emysql),
+
+  %% emysql DB pool 생성
+  emysql:add_pool(
+    chatting_db,
+    [{size,1},
+      {user,"root"},
+      {password,"jhkim1020"},
+      {database,"erlangprac_chattingdb"},
+      {encoding,utf8}
+    ]),
 
   %% Cowboy의 Router를 설정함
   Dispatch = cowboy_router:compile([
