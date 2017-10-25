@@ -1,5 +1,5 @@
 *.beam
-./deps
-./ebin
+deps
+ebin
 .idea
 .rebar
