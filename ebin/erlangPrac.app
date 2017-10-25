@@ -1,9 +1,0 @@
-{application,erlangPrac,
-             [{description,[]},
-              {vsn,"1"},
-              {registered,[]},
-              {applications,[kernel,stdlib]},
-              {mod,{erlangPrac_app,[]}},
-              {env,[]},
-              {modules,[erlangPrac_app,erlangPrac_http,erlangPrac_reloader,
-                        erlangPrac_sup]}]}.
