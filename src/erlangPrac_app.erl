@@ -71,8 +71,6 @@ start(_StartType, _StartArgs) ->
   %% Code reloader 실행
   erlangPrac_reloader:start(),
 
-  %% dets table 생성
-  dets:open_file(users_list,[{type,set}]),
 
   case erlangPrac_sup:start_link() of
     {ok, Pid} ->

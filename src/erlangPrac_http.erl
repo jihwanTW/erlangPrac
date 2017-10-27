@@ -29,23 +29,33 @@ handle(Req,State)->
   ], Reply,Req4),
   {ok,Req5,State}.
 
-handle(<<"login">>,_,_,Data)->
-  Id = proplists:get_value(<<"id">>,Data),
-  Password= proplists:get_value(<<"pw">>,Data),
-  case dets:lookup(users_list,Id) of
-    [{Id,Password}]->
-      <<"{\"result\":\"ok\"}">>;
-    _ ->
-      <<"{\"result\":\"fail\"}">>
-  end;
+%%handle(<<"login">>,_,_,Data)->
+%%  Id = proplists:get_value(<<"id">>,Data),
+%%  Password= proplists:get_value(<<"pw">>,Data),
+%%  case dets:lookup(users_list,Id) of
+%%    [{Id,Password}]->
+%%      <<"{\"result\":\"ok\"}">>;
+%%    _ ->
+%%      <<"{\"result\":\"fail\"}">>
+%%  end;
 handle(<<"user">>,<<"register">>,_,Data) ->
-  erlangPrac_user:register_user(Data);
+  erlangPrac_user:user(user_register,Data);
 handle(<<"user">>,<<"update">>,_,Data) ->
-  erlangPrac_user:update_user(Data);
-handle(<<"user">>,<<"send_dialog">>,_,Data) ->
-  erlangPrac_user:send_dialog(Data);
-handle(<<"chatting">>,<<"view">>,_,Data) ->
-  erlangPrac_user:view_dialog(Data);
+  erlangPrac_user:user(user_update,Data);
+
+handle(<<"user">>,<<"dialog">>,<<"send">>,Data) ->
+  erlangPrac_user:dialog(dialog_send,Data);
+handle(<<"user">>,<<"dialog">>,<<"view">>,Data) ->
+  erlangPrac_user:dialog(dialog_view,Data);
+
+handle(<<"user">>,<<"friend">>,<<"request">>,Data) ->
+  erlangPrac_user:friend(request,Data);
+handle(<<"user">>,<<"friend">>,<<"answer">>,Data) ->
+  erlangPrac_user:friend(answer,Data);
+handle(<<"user">>,<<"friend">>,<<"view">>,Data) ->
+  erlangPrac_user:friend(view,Data);
+handle(<<"user">>,<<"friend">>,<<"view_request">>,Data) ->
+  erlangPrac_user:friend(view_request,Data);
 handle(_,_,_,_)->
   <<"{\"result\":\"error\"}">>.
 
