@@ -10,10 +10,12 @@
 -author("Twinny-KJH").
 
 %% API
--export([user/2,dialog/2,friend/2]).
+-export([user_register/1, user_update/1,
+  dialog_send/1, dialog_view/1,
+  friend_request/1,friend_answer/1,friend_view/1,friend_request_view/1]).
 %% proplists:is_defined(key,list)
 %% 유저 가입시키기
-user(RequestAtom,Data) when RequestAtom =:= user_register  ->
+user_register(Data) ->
   % 닉네임과 이메일 중복체크
   Name=proplists:get_value(<<"name">>,Data),
   Email=proplists:get_value(<<"email">>,Data),
@@ -27,9 +29,10 @@ user(RequestAtom,Data) when RequestAtom =:= user_register  ->
     _ ->
       % 중복되므로, Duplicate 메세지 전달
       jsx:encode([{<<"result">>,<<"Duplicate">>}])
-  end;
+  end.
+
 %% 유저 정보변경
-user(RequestAtom,Data) when RequestAtom =:= user_update->
+user_update(Data)->
   User_idx = proplists:get_value(<<"user_idx">>,Data),
   Email = proplists:get_value(<<"email">>,Data),
   Nickname = proplists:get_value(<<"nickname">>,Data),
@@ -47,7 +50,7 @@ user(RequestAtom,Data) when RequestAtom =:= user_update->
   end.
 
 %% 대화보내기
-dialog(RequestAtom,Data) when RequestAtom =:= dialog_send ->
+dialog_send(Data) ->
   % 방에 유저가 존재하는지여부 조회
   User_idx = proplists:get_value(<<"user_idx">>,Data),
   Room_idx = proplists:get_value(<<"room_idx">>,Data),
@@ -56,14 +59,14 @@ dialog(RequestAtom,Data) when RequestAtom =:= dialog_send ->
   case Result of
     []->
       %% 유저가 방에 존재하지 않을경우 , 아래 문자열 전달
-      jsx:encode([{<<"result">>,<<"not exist user in room">>}]);
+      {400,jsx:encode([{<<"result">>,<<"not exist user in room">>}])};
     _->
       %% 유저가 방에 존재할 경우, 다이얼로그에 추가
       erlangPrac_query:query(send_dialog,User_idx,Room_idx,Dialog),
       jsx:encode([{<<"result">>,<<"send dialog">>}])
-  end;
+  end.
 %% 대화 조회 .
-dialog(RequestAtom,Data) when RequestAtom =:= dialog_view->
+dialog_view(Data) ->
   % 방에 유저가 존재하는지여부 조회
   User_idx = proplists:get_value(<<"user_idx">>,Data),
   Room_idx = proplists:get_value(<<"room_idx">>,Data),
@@ -72,7 +75,7 @@ dialog(RequestAtom,Data) when RequestAtom =:= dialog_view->
   case Result of
     []->
       % 유저가 방에 존재하지 않을경우 , 아래 문자열 전달
-      jsx:encode([{<<"result">>,<<"not exist user in room">>}]);
+      {400,jsx:encode([{<<"result">>,<<"not exist user in room">>}])};
     _->
       % 현재까지 읽은 dialog idx 를 확인한 후에 그 이후의 데이터에 대해 읽어옴
       DialogResult = erlangPrac_query:query(view_dialog,Room_idx,User_idx,Read_idx),
@@ -81,25 +84,23 @@ dialog(RequestAtom,Data) when RequestAtom =:= dialog_view->
   end.
 
 %% 친구 신청
-friend(RequestAtom,Data) when RequestAtom =:= friend_request->
+friend_request(Data)->
   User_idx = proplists:get_value(<<"user_idx">>,Data),
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
   erlangPrac_query:query(friend_request,User_idx,Target_idx),
-  jsx:encode([{<<"result">>,<<"friend request">>}]);
+  jsx:encode([{<<"result">>,<<"friend request">>}]).
 %% 친구 수락 / 거절 / 대기
-friend(RequestAtom,Data) when RequestAtom =:= friend_answer->
+friend_answer(Data)->
   User_idx = proplists:get_value(<<"user_idx">>,Data),
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
   Answer = proplists:get_value(<<"answer">>,Data),
   erlangPrac_query:query(friend_answer,User_idx,Target_idx,Answer),
-  jsx:encode([{<<"result">>,<<"aswer . state change">>}]);
+  jsx:encode([{<<"result">>,<<"aswer . state change">>}]).
 %% 친구 리스트 보기
-friend(RequestAtom,Data) when RequestAtom =:= friend_view->
+friend_view(Data)->
   User_idx = proplists:get_value(<<"user_idx">>,Data),
-  jsx:encode(emysql_util:as_json(erlangPrac_query:query(friend_view,User_idx)));
+  jsx:encode(emysql_util:as_json(erlangPrac_query:query(friend_view,User_idx))).
 %% 친구 요청 리스트 보기
-friend(RequestAtom,Data) when RequestAtom =:= friend_view_request->
+friend_request_view(Data)->
   User_idx = proplists:get_value(<<"user_idx">>,Data),
-  jsx:encode(emysql_util:as_json(erlangPrac_query:query(friend_view_request,User_idx)));
-friend(RequestAtom,_)->
-  jsx:encode([{"result","error request"},{"request",RequestAtom}]).
+  jsx:encode(emysql_util:as_json(erlangPrac_query:query(friend_request_view,User_idx))).

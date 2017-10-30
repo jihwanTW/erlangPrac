@@ -22,99 +22,67 @@ handle(Req,State)->
   %% 데이터 로딩
   {ok,Data,Req4} = cowboy_req:body_qs(Req3),
 
-  Reply = handle(Api,What,Opt,Data),
+  {HttpStateCode,Reply}= handle(Api,What,Opt,Data),
 
-  {ok,Req5} = cowboy_req:reply(200,[
+  {ok,Req5} = cowboy_req:reply(HttpStateCode,[
     {<<"content-type">>,<<"text/plain">>}
   ], Reply,Req4),
   {ok,Req5,State}.
 
-%%handle(<<"login">>,_,_,Data)->
-%%  Id = proplists:get_value(<<"id">>,Data),
-%%  Password= proplists:get_value(<<"pw">>,Data),
-%%  case dets:lookup(users_list,Id) of
-%%    [{Id,Password}]->
-%%      <<"{\"result\":\"ok\"}">>;
-%%    _ ->
-%%      <<"{\"result\":\"fail\"}">>
-%%  end;
+%% 유저 가입관련 함수
 handle(<<"user">>,<<"register">>,_,Data) ->
-  % 필요 데이터가 전달되었는지 조회
-  RequestAtom = user_register,
-  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
-  if InputResult == true ->
-    erlangPrac_user:user(RequestAtom,Data);
-    true->
-      InputResult
-  end;
+  Result = check_input(user_register,Data, erlangPrac_user:user_register(Data)),
+  append_http_code(Result);
 handle(<<"user">>,<<"update">>,_,Data) ->
-  % 필요 데이터가 전달되었는지 조회
-  RequestAtom = user_update,
-  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
-  if InputResult == true ->
-    erlangPrac_user:user(RequestAtom,Data);
-    true->
-      InputResult
-  end;
+  Result = check_input(user_update,Data, erlangPrac_user:user_update(Data)),
+  append_http_code(Result);
 
+%% 유저 대화관련 함수
 handle(<<"user">>,<<"dialog">>,<<"send">>,Data) ->
-  % 필요 데이터가 전달되었는지 조회
-  RequestAtom = dialog_send,
-  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
-  if InputResult == true ->
-    erlangPrac_user:dialog(RequestAtom,Data);
-    true->
-      InputResult
-  end;
+  Result = check_input(dialog_send,Data, erlangPrac_user:dialog_send(Data)),
+  append_http_code(Result);
 handle(<<"user">>,<<"dialog">>,<<"view">>,Data) ->
-  % 필요 데이터가 전달되었는지 조회
-  RequestAtom = dialog_view,
-  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
-  if InputResult == true ->
-    erlangPrac_user:dialog(RequestAtom,Data);
-    true->
-      InputResult
-  end;
+  Result = check_input(dialog_view,Data,erlangPrac_user:dialog_view(Data)),
+  append_http_code(Result);
 
+%% 친구 관련 함수
 handle(<<"user">>,<<"friend">>,<<"request">>,Data) ->
-  % 필요 데이터가 전달되었는지 조회
-  RequestAtom = friend_request,
-  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
-  if InputResult == true ->
-    erlangPrac_user:friend(RequestAtom,Data);
-    true->
-      InputResult
-  end;
+  Result = check_input(friend_request,Data, erlangPrac_user:friend_request(Data)),
+  append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"answer">>,Data) ->
-  % 필요 데이터가 전달되었는지 조회
-  RequestAtom = friend_answer,
-  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
-  if InputResult == true ->
-    erlangPrac_user:friend(RequestAtom,Data);
-    true->
-      InputResult
-  end;
+  Result = check_input(friend_answer,Data,erlangPrac_user:friend_answer(Data)),
+  append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"view">>,Data) ->
-  % 필요 데이터가 전달되었는지 조회
-  RequestAtom = friend_view,
-  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
-  if InputResult == true ->
-    erlangPrac_user:friend(RequestAtom,Data);
-    true->
-      InputResult
-  end;
+  Result =  check_input(friend_view,Data,erlangPrac_user:friend_view(Data)),
+  append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"view_request">>,Data) ->
-  % 필요 데이터가 전달되었는지 조회
-  RequestAtom = friend_view_request,
+  Result = check_input(friend_request_view,Data, erlangPrac_user:friend_request_view(Data)),
+  append_http_code(Result);
+handle(_,_,_,_)->
+  {404,jsx:encode([{<<"result">>,<<"undefined url">>}])}.
+
+
+check_input(RequestAtom,Data, Function)->
   InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
   if InputResult == true ->
-    erlangPrac_user:friend(RequestAtom,Data);
+    Function;
     true->
       InputResult
-  end;
-handle(_,_,_,_)->
-  <<"{\"result\":\"error\"}">>.
+  end
+  .
 
+append_http_code(Result)->
+  % tuple 값이 들어오면, 해당부분은 상태코드가 포함된 에러값이 리턴된것이므로, 그대로 반환.
+  if is_tuple(Result)->
+    Result;
+    % binary 값이 들어오면, json 형태의 문자열이 들어온것이므로, 상태코드 200을 포함하여 반환
+    is_binary(Result)->
+      {200,Result};
+    % 예상되지 않은 에러대한 결과코드는 어떤방식으로 ??
+    true->
+      {500,Result}
+  end
+  .
 
 
 

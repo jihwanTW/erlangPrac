@@ -17,12 +17,15 @@
 %% query/2
 %% 친구목록 조회
 query(QueryType,User_idx) when QueryType =:= friend_view->
-  emysql:prepare(friend_view,<<"SELECT * FROM user WHERE idx in (SELECT friend_idx FROM friend_list WHERE user_idx=? and state='yes')">>),
+  emysql:prepare(friend_view,<<"SELECT * FROM user join friend_list on user.idx = friend_list.user_idx WHERE user.idx=? and state='yes'">>),
   emysql:execute(chatting_db,friend_view,[User_idx]);
 %% 친구 요청 목록 조회
-query(QueryType,User_idx) when QueryType =:= friend_view_request->
-  emysql:prepare(friend_view_request,<<"SELECT * FROM user WHERE idx in (SELECT user_idx FROM friend_list WHERE friend_idx=? and state='wait')">>),
-  emysql:execute(chatting_db,friend_view_request,[User_idx]).
+query(QueryType,User_idx) when QueryType =:= friend_request_view->
+  emysql:prepare(friend_request_view,<<"SELECT * FROM user join friend_list on user.idx = friend_list.friend_idx WHERE friend_list.friend_idx=? and state='wait'">>),
+  emysql:execute(chatting_db,friend_request_view,[User_idx]);
+query(QueryType,_)->
+  {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
+.
 
 %% query/3
 %% 방에 유저가 존재하는지 조회
@@ -37,8 +40,8 @@ query(QueryType,Nickname,Email) when QueryType =:= check_duplicate->
 query(QueryType,User_idx,Target_idx) when QueryType =:= friend_request->
   emysql:prepare(friend_request,<<"INSERT INTO friend_list (user_idx,friend_idx) values (?, ?) ">>),
   emysql:execute(chatting_db,friend_request,[User_idx,Target_idx]);
-query(_,_,_)->
-{"result","query type error"}
+query(QueryType,_,_)->
+  {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
 
 %% query/4
@@ -94,6 +97,6 @@ query(QueryType,Email,Nickname,User_idx) when QueryType =:= update_user->
 query(QueryType,User_idx,Target_idx,Answer) when QueryType =:= friend_answer->
   emysql:prepare(update_user,<<"UPDATE friend_list SET state=? WHERE user_idx=? and friend_idx = ?">>),
   emysql:execute(chatting_db,update_user,[Answer,User_idx,Target_idx]);
-query(_,_,_,_)->
-  {"result","query type error"}
+query(QueryType,_,_,_)->
+  {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
