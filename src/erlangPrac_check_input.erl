@@ -41,7 +41,19 @@ check_input(QueryType,Data) when QueryType =:= friend_view->
   check([<<"user_idx">>],Data);
 %% 친구요청목록보기 데이터 존재여부 체크
 check_input(QueryType,Data) when QueryType =:= friend_request_view->
-  check([<<"user_idx">>],Data)
+  check([<<"user_idx">>],Data);
+%% 친구이름 업데이트 데이터 존재여부 체크
+check_input(QueryType,Data) when QueryType =:= friend_name_update->
+  check([<<"user_idx">>,<<"target_idx">>,<<"change_name">>],Data);
+%% 즐겨찾기에 추가 데이터 존재여부 체크
+check_input(QueryType,Data) when QueryType =:= friend_add_favorites->
+  check([<<"user_idx">>,<<"target_idx">>],Data);
+%% 즐겨찾기에서 제거 데이터 존재여부 체크
+check_input(QueryType,Data) when QueryType =:= friend_remove_favorites->
+  check([<<"user_idx">>,<<"target_idx">>],Data);
+%% 즐겨찾기 이름변경 데이터 존재여부 체크
+check_input(QueryType,Data) when QueryType =:= friend_favorites_name_update->
+  check([<<"user_idx">>,<<"target_idx">>,<<"change_name">>],Data)
 .
 
 

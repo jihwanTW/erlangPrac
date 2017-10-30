@@ -58,6 +58,19 @@ handle(<<"user">>,<<"friend">>,<<"view">>,Data) ->
 handle(<<"user">>,<<"friend">>,<<"view_request">>,Data) ->
   Result = check_input(friend_request_view,Data, erlangPrac_user:friend_request_view(Data)),
   append_http_code(Result);
+handle(<<"user">>,<<"friend">>,<<"name_update">>,Data) ->
+  Result = check_input(friend_name_update,Data, erlangPrac_user:friend_name_update(Data)),
+  append_http_code(Result);
+
+handle(<<"user">>,<<"friend">>,<<"add_favorites">>,Data) ->
+  Result = check_input(friend_add_favorites,Data, erlangPrac_user:friend_add_favorites(Data)),
+  append_http_code(Result);
+handle(<<"user">>,<<"friend">>,<<"remove_favorites">>,Data) ->
+  Result = check_input(friend_remove_favorites,Data, erlangPrac_user:friend_remove_favorites(Data)),
+  append_http_code(Result);
+handle(<<"user">>,<<"friend">>,<<"favorites_name_update">>,Data) ->
+  Result = check_input(friend_favorites_name_update,Data, erlangPrac_user:friend_favorites_name_update(Data)),
+  append_http_code(Result);
 handle(_,_,_,_)->
   {404,jsx:encode([{<<"result">>,<<"undefined url">>}])}.
 

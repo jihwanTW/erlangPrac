@@ -12,7 +12,7 @@
 %% API
 -export([user_register/1, user_update/1,
   dialog_send/1, dialog_view/1,
-  friend_request/1,friend_answer/1,friend_view/1,friend_request_view/1]).
+  friend_request/1,friend_answer/1,friend_view/1,friend_request_view/1,friend_add_favorites/1,friend_remove_favorites/1,friend_favorites_name_update/1,friend_name_update/1]).
 %% proplists:is_defined(key,list)
 %% 유저 가입시키기
 user_register(Data) ->
@@ -104,3 +104,29 @@ friend_view(Data)->
 friend_request_view(Data)->
   User_idx = proplists:get_value(<<"user_idx">>,Data),
   jsx:encode(emysql_util:as_json(erlangPrac_query:query(friend_request_view,User_idx))).
+
+friend_add_favorites(Data)->
+  User_idx = proplists:get_value(<<"user_idx">>,Data),
+  Target_idx = proplists:get_value(<<"target_idx">>,Data),
+  erlangPrac_query:query(friend_add_favorites,User_idx,Target_idx),
+  jsx:encode([{<<"result">>,<<"add friends">>}]).
+
+friend_remove_favorites(Data)->
+  User_idx = proplists:get_value(<<"user_idx">>,Data),
+  Target_idx = proplists:get_value(<<"target_idx">>,Data),
+  erlangPrac_query:query(friend_remove_favorites,User_idx,Target_idx),
+  jsx:encode([{<<"result">>,<<"remove friends">>}]).
+
+friend_name_update(Data)->
+  User_idx = proplists:get_value(<<"user_idx">>,Data),
+  Target_idx = proplists:get_value(<<"target_idx">>,Data),
+  Change_name = proplists:get_value(<<"change_name">>,Data),
+  erlangPrac_query:query(friend_name_update,User_idx,Target_idx,Change_name),
+  jsx:encode([{<<"result">>,<<"update friends name">>}]).
+
+friend_favorites_name_update(Data)->
+  User_idx = proplists:get_value(<<"user_idx">>,Data),
+  Target_idx = proplists:get_value(<<"target_idx">>,Data),
+  Change_name = proplists:get_value(<<"change_name">>,Data),
+ erlangPrac_query:query(friend_favorites_name_update,User_idx,Target_idx,Change_name),
+  jsx:encode([{<<"result">>,<<"update friends favorites name">>}]).
