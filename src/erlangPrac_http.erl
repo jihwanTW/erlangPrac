@@ -39,23 +39,79 @@ handle(Req,State)->
 %%      <<"{\"result\":\"fail\"}">>
 %%  end;
 handle(<<"user">>,<<"register">>,_,Data) ->
-  erlangPrac_user:user(user_register,Data);
+  % 필요 데이터가 전달되었는지 조회
+  RequestAtom = user_register,
+  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
+  if InputResult == true ->
+    erlangPrac_user:user(RequestAtom,Data);
+    true->
+      InputResult
+  end;
 handle(<<"user">>,<<"update">>,_,Data) ->
-  erlangPrac_user:user(user_update,Data);
+  % 필요 데이터가 전달되었는지 조회
+  RequestAtom = user_update,
+  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
+  if InputResult == true ->
+    erlangPrac_user:user(RequestAtom,Data);
+    true->
+      InputResult
+  end;
 
 handle(<<"user">>,<<"dialog">>,<<"send">>,Data) ->
-  erlangPrac_user:dialog(dialog_send,Data);
+  % 필요 데이터가 전달되었는지 조회
+  RequestAtom = dialog_send,
+  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
+  if InputResult == true ->
+    erlangPrac_user:dialog(RequestAtom,Data);
+    true->
+      InputResult
+  end;
 handle(<<"user">>,<<"dialog">>,<<"view">>,Data) ->
-  erlangPrac_user:dialog(dialog_view,Data);
+  % 필요 데이터가 전달되었는지 조회
+  RequestAtom = dialog_view,
+  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
+  if InputResult == true ->
+    erlangPrac_user:dialog(RequestAtom,Data);
+    true->
+      InputResult
+  end;
 
 handle(<<"user">>,<<"friend">>,<<"request">>,Data) ->
-  erlangPrac_user:friend(request,Data);
+  % 필요 데이터가 전달되었는지 조회
+  RequestAtom = friend_request,
+  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
+  if InputResult == true ->
+    erlangPrac_user:friend(RequestAtom,Data);
+    true->
+      InputResult
+  end;
 handle(<<"user">>,<<"friend">>,<<"answer">>,Data) ->
-  erlangPrac_user:friend(answer,Data);
+  % 필요 데이터가 전달되었는지 조회
+  RequestAtom = friend_answer,
+  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
+  if InputResult == true ->
+    erlangPrac_user:friend(RequestAtom,Data);
+    true->
+      InputResult
+  end;
 handle(<<"user">>,<<"friend">>,<<"view">>,Data) ->
-  erlangPrac_user:friend(view,Data);
+  % 필요 데이터가 전달되었는지 조회
+  RequestAtom = friend_view,
+  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
+  if InputResult == true ->
+    erlangPrac_user:friend(RequestAtom,Data);
+    true->
+      InputResult
+  end;
 handle(<<"user">>,<<"friend">>,<<"view_request">>,Data) ->
-  erlangPrac_user:friend(view_request,Data);
+  % 필요 데이터가 전달되었는지 조회
+  RequestAtom = friend_view_request,
+  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
+  if InputResult == true ->
+    erlangPrac_user:friend(RequestAtom,Data);
+    true->
+      InputResult
+  end;
 handle(_,_,_,_)->
   <<"{\"result\":\"error\"}">>.
 
