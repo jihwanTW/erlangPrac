@@ -29,31 +29,33 @@ check_input(QueryType,Data) when QueryType =:= dialog_send->
   check([<<"user_idx">>,<<"room_idx">>,<<"dialog">>],Data);
 
 %% 친구관련
-%% 친구요청 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_request->
+%% 친구추가 데이터 존재여부 체크
+check_input(QueryType,Data) when QueryType =:= friend_add->
   check([<<"user_idx">>,<<"target_idx">>],Data);
-
-%% 친구요청 응답 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_answer->
-  check([<<"user_idx">>,<<"target_idx">>,<<"answer">>],Data);
+%% 친구삭제 데이터 존재여부 체크
+check_input(QueryType,Data) when QueryType =:= friend_remove->
+  check([<<"user_idx">>,<<"target_idx">>],Data);
 %% 친구목록보기 데이터 존재여부 체크
 check_input(QueryType,Data) when QueryType =:= friend_view->
   check([<<"user_idx">>],Data);
 %% 친구요청목록보기 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_request_view->
+check_input(QueryType,Data) when QueryType =:= friend_suggest_view->
   check([<<"user_idx">>],Data);
 %% 친구이름 업데이트 데이터 존재여부 체크
 check_input(QueryType,Data) when QueryType =:= friend_name_update->
   check([<<"user_idx">>,<<"target_idx">>,<<"change_name">>],Data);
 %% 즐겨찾기에 추가 데이터 존재여부 체크
 check_input(QueryType,Data) when QueryType =:= friend_add_favorites->
-  check([<<"user_idx">>,<<"target_idx">>],Data);
+  check([<<"favorites_idx">>,<<"user_idx">>,<<"target_idx">>],Data);
 %% 즐겨찾기에서 제거 데이터 존재여부 체크
 check_input(QueryType,Data) when QueryType =:= friend_remove_favorites->
   check([<<"user_idx">>,<<"target_idx">>],Data);
 %% 즐겨찾기 이름변경 데이터 존재여부 체크
 check_input(QueryType,Data) when QueryType =:= friend_favorites_name_update->
-  check([<<"user_idx">>,<<"target_idx">>,<<"change_name">>],Data)
+  check([<<"user_idx">>,<<"favorites_name">>,<<"favorites_idx">>],Data);
+%% 즐겨찾기 유저 옮기기 데이터 존재여부 체크
+check_input(QueryType,Data) when QueryType =:= favorites_move->
+  check([<<"user_idx">>,<<"target_idx">>,<<"favorites_idx">>],Data)
 .
 
 
@@ -62,9 +64,9 @@ check(NeedList,Data)->
     proplists:is_defined(NeedParam,Data) == false
     end,
   Result = lists:filter(CheckDef, NeedList),
-  if Result == [] ->
-    true;
-    true ->
-      {400,jsx:encode([{<<"result">>,<<"Not enough data">>}])}
+  case Result of
+    []->true;
+    _->
+      {error,jsx:encode([{<<"result">>,<<"Not enough data">>}])}
   end.
 

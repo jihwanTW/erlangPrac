@@ -10,19 +10,30 @@
 -author("Twinny-KJH").
 
 %% API
--export([query/2,query/3,query/4]).
+-export([query/2,query/3,query/4,query/5]).
 
 %% Name,Email,Nickname,Room_idx,User_idx,Read_idx
 
 %% query/2
 %% 친구목록 조회
 query(QueryType,User_idx) when QueryType =:= friend_view->
-  emysql:prepare(friend_view,<<"SELECT * FROM user join friend_list on user.idx = friend_list.user_idx or user.idx = friend_list.friend_idx WHERE (friend_list.user_idx=? or friend_list.friend_idx = ?) and friend_list.state='yes' and user.idx != ?">>),
-  emysql:execute(chatting_db,friend_view,[User_idx,User_idx,User_idx]);
-%% 친구 요청 목록 조회
-query(QueryType,User_idx) when QueryType =:= friend_request_view->
-  emysql:prepare(friend_request_view,<<"SELECT user.* FROM user join friend_list on user.idx = friend_list.friend_idx WHERE friend_list.friend_idx=? and state='wait'">>),
-  emysql:execute(chatting_db,friend_request_view,[User_idx]);
+  SQL =
+    "SELECT    *
+     FROM      user
+     JOIN      friend_list
+     JOIN      favorites
+     ON        user.idx = friend_list.friend_idx AND
+               friend_list.favorites_idx = favorites.idx
+     WHERE     friend_list.user_idx = ? AND
+               ( favorites.idx = friend_list.favorites_idx OR friend_list.favorites_idx = 0 )
+     ORDER BY  friend_list.favorites_idx DESC,
+               friend_list.custom_name DESC ",
+  emysql:prepare(friend_view, SQL),
+  emysql:execute(chatting_db,friend_view,[User_idx]);
+%% 친구가 되어있는 추천친구 확인하기
+query(QueryType,User_idx) when QueryType =:= friend_suggest_view->
+  emysql:prepare(friend_suggest_view,<<"SELECT * FROM user join friend_list on user.idx = friend_list.user_idx WHERE friend_list.friend_idx = ?">>),
+  emysql:execute(chatting_db,friend_suggest_view,[User_idx]);
 query(QueryType,_)->
   {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
@@ -36,18 +47,18 @@ query(QueryType,Room_idx,User_idx) when QueryType =:= check_room->
 query(QueryType,Nickname,Email) when QueryType =:= check_duplicate->
   emysql:prepare(check_user,<<"SELECT * FROM user WHERE email=? or nickname=? ">>),
   emysql:execute(chatting_db,check_user,[Email,Nickname]);
-%% 친구 요청
-query(QueryType,User_idx,Target_idx) when QueryType =:= friend_request->
-  emysql:prepare(friend_request,<<"INSERT INTO friend_list (user_idx,friend_idx) values (?, ?) ">>),
-  emysql:execute(chatting_db,friend_request,[User_idx,Target_idx]);
-%% 친구 즐겨찾기 추가
-query(QueryType,User_idx,Target_idx) when QueryType =:= friend_add_favorites->
-  emysql:prepare(friend_request,<<"UPDATE friend_list SET favorites = ? WHERE user_idx=? and friend_idx=?">>),
-  emysql:execute(chatting_db,friend_request,[<<"yes">>,User_idx,Target_idx]);
+%% 친구 추가
+query(QueryType,User_idx,Target_idx) when QueryType =:= friend_add->
+  emysql:prepare(friend_add,<<"INSERT INTO friend_list (friend_list.user_idx,friend_list.friend_idx,friend_list.custom_name) values (?, ?, (SELECT nickname FROM user WHERE idx = ?)) ">>),
+  emysql:execute(chatting_db,friend_add,[User_idx,Target_idx,Target_idx]);
+%% 친구 삭제
+query(QueryType,User_idx,Target_idx) when QueryType =:= friend_remove->
+  emysql:prepare(friend_remove,<<"DELETE FROM friend_list WHERE user_idx = ? and friend_idx = ?">>),
+  emysql:execute(chatting_db,friend_remove,[User_idx,Target_idx]);
 %% 친구 즐겨찾기 삭제
 query(QueryType,User_idx,Target_idx) when QueryType =:= friend_remove_favorites->
-  emysql:prepare(friend_request,<<"UPDATE friend_list SET favorites = ? WHERE user_idx=? and friend_idx=?">>),
-  emysql:execute(chatting_db,friend_request,[<<"no">>,User_idx,Target_idx]);
+  emysql:prepare(remove_favorites,<<"UPDATE friend_list SET favorites_idx = ? WHERE user_idx=? and friend_idx= ?">>),
+  emysql:execute(chatting_db,remove_favorites,[0,User_idx,Target_idx]);
 query(QueryType,_,_)->
   {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
@@ -103,16 +114,52 @@ query(QueryType,Email,Nickname,User_idx) when QueryType =:= update_user->
   emysql:execute(chatting_db,update_user,[Email,Nickname,User_idx]);
 %% 친구 이름변경
 query(QueryType, User_idx, Target_idx, Change_Name) when QueryType =:= friend_name_update->
-  emysql:prepare(update_user,<<"UPDATE friend_list SET name=? WHERE user_idx = ? and friend_idx = ?">>),
-  emysql:execute(chatting_db,update_user,[Change_Name,User_idx, Target_idx]);
+  if Change_Name =:= <<"">> ->
+    emysql:prepare(name_update,<<"UPDATE friend_list,user SET friend_list.custom_name=user.nickname WHERE friend_list.user_idx = ? and friend_list.friend_idx = ? and user.idx = ?">>),
+    emysql:execute(chatting_db,name_update,[User_idx, Target_idx,User_idx]);
+    true ->
+      emysql:prepare(name_update,<<"UPDATE friend_list SET custom_name=? WHERE user_idx = ? and friend_idx = ?">>),
+      emysql:execute(chatting_db,name_update,[Change_Name,User_idx, Target_idx])
+    end;
+%% 친구 즐겨찾기 추가 or 친구 즐겨찾기 그룹 옮기기
+query(QueryType,User_idx,Target_idx,Favorites_idx) when QueryType =:= friend_add_favorites orelse QueryType =:= friend_favorites_move->
+  emysql:prepare(add_favorites,<<"UPDATE friend_list SET favorites_idx = ? WHERE user_idx=? and friend_idx= ?">>),
+  emysql:execute(chatting_db,add_favorites,[Favorites_idx,User_idx,Target_idx]);
 %% 친구 즐겨찾기 이름변경
-query(QueryType, User_idx, Target_idx, Change_Name) when QueryType =:= friend_favorites_name_update->
-  emysql:prepare(update_user,<<"UPDATE friend_list SET favorites_name=? WHERE user_idx = ? and friend_idx = ?">>),
-  emysql:execute(chatting_db,update_user,[Change_Name,User_idx, Target_idx]);
-%% 친구 요청 응답
-query(QueryType,User_idx,Target_idx,Answer) when QueryType =:= friend_answer->
-  emysql:prepare(update_user,<<"UPDATE friend_list SET state=? WHERE user_idx=? and friend_idx = ?">>),
-  emysql:execute(chatting_db,update_user,[Answer,User_idx,Target_idx]);
+query(QueryType, User_idx, Change_Name,Favorites_idx) when QueryType =:= friend_favorites_name_update->
+  % 바뀔 즐겨찾기이름 중복조회
+  emysql:prepare(favorites_check_duplicate,<<"SELECT * FROM favorites WHERE favorites_name = ?">>),
+  {_,_,_,Result,_} = emysql:execute(chatting_db,favorites_check_duplicate,[Change_Name]),
+  case Result of
+    []->
+      % 바뀔 그룹명 insert
+      emysql:prepare(favorites_name_insert,<<"INSERT INTO favorites (favorites_name) values (?)">>),
+      emysql:execute(chatting_db,favorites_name_insert,[Change_Name]);
+    _->
+      true
+  end,
+  % 바뀔 그룹으로 update 해당 즐겨찾기 그룹 전체에대한 update
+  emysql:prepare(favorites_name_update,<<"UPDATE friend_list,favorites SET friend_list.favorites_idx=favorites.idx WHERE friend_list.user_idx = ? and friend_list.favorites_idx = ? and favorites.favorites_name = ?">>),
+  emysql:execute(chatting_db,favorites_name_update,[User_idx,Favorites_idx,Change_Name]);
 query(QueryType,_,_,_)->
   {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
+.
+
+query(QueryType,_,_,_,_)->
+  {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
+.
+
+%% prepare function 과 execute function 이 반복되고있다! 이걸 모듈화시키는게 괜찮은걸까 ?
+execute_query(QueryType,Query,DataList) when is_atom(QueryType),is_binary(Query),is_list(DataList)->
+  emysql:prepare(QueryType,Query),
+  try emysql:execute(chatting_db,QueryType,DataList)
+  catch
+    throw:Why -> {500,jsx:encode([{"result",Why}])};
+    exit:Why -> {500,jsx:encode([{"result",Why}])};
+    error:Why -> {500,jsx:encode([{"result",Why}])}
+  end
+  ;
+execute_query(QueryType,Query,DataList) ->
+  io:format("error  : ~p ~n",[jsx:encode([{"result","query error"},{"query_type",QueryType},{"query",Query},{"data_list",DataList}])]),
+  {500,jsx:encode([{"error","query error check server log!"}])}
 .

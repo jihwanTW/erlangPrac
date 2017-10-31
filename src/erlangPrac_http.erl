@@ -21,8 +21,9 @@ handle(Req,State)->
   {Opt,Req3} = cowboy_req:binding(opt,Req2),
   %% 데이터 로딩
   {ok,Data,Req4} = cowboy_req:body_qs(Req3),
+  [{ExportJSON,_}] = Data,
 
-  {HttpStateCode,Reply}= handle(Api,What,Opt,Data),
+  {HttpStateCode,Reply}= handle(Api,What,Opt,jsx:decode(ExportJSON)),
 
   {ok,Req5} = cowboy_req:reply(HttpStateCode,[
     {<<"content-type">>,<<"text/plain">>}
@@ -46,17 +47,17 @@ handle(<<"user">>,<<"dialog">>,<<"view">>,Data) ->
   append_http_code(Result);
 
 %% 친구 관련 함수
-handle(<<"user">>,<<"friend">>,<<"request">>,Data) ->
-  Result = check_input(friend_request,Data, erlangPrac_user:friend_request(Data)),
+handle(<<"user">>,<<"friend">>,<<"add">>,Data) ->
+  Result = check_input(friend_add,Data, erlangPrac_user:friend_add(Data)),
   append_http_code(Result);
-handle(<<"user">>,<<"friend">>,<<"answer">>,Data) ->
-  Result = check_input(friend_answer,Data,erlangPrac_user:friend_answer(Data)),
+handle(<<"user">>,<<"friend">>,<<"remove">>,Data) ->
+  Result = check_input(friend_remove,Data, erlangPrac_user:friend_remove(Data)),
   append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"view">>,Data) ->
   Result =  check_input(friend_view,Data,erlangPrac_user:friend_view(Data)),
   append_http_code(Result);
-handle(<<"user">>,<<"friend">>,<<"view_request">>,Data) ->
-  Result = check_input(friend_request_view,Data, erlangPrac_user:friend_request_view(Data)),
+handle(<<"user">>,<<"friend">>,<<"suggest_view">>,Data) ->
+  Result = check_input(friend_suggest_view,Data, erlangPrac_user:friend_suggest_view(Data)),
   append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"name_update">>,Data) ->
   Result = check_input(friend_name_update,Data, erlangPrac_user:friend_name_update(Data)),
@@ -71,11 +72,14 @@ handle(<<"user">>,<<"friend">>,<<"remove_favorites">>,Data) ->
 handle(<<"user">>,<<"friend">>,<<"favorites_name_update">>,Data) ->
   Result = check_input(friend_favorites_name_update,Data, erlangPrac_user:friend_favorites_name_update(Data)),
   append_http_code(Result);
+handle(<<"user">>,<<"friend">>,<<"favorites_move">>,Data) ->
+  Result = check_input(friend_favorites_move,Data, erlangPrac_user:friend_favorites_move(Data)),
+  append_http_code(Result);
 handle(_,_,_,_)->
   {404,jsx:encode([{<<"result">>,<<"undefined url">>}])}.
 
 
-check_input(RequestAtom,Data, Function)->
+check_input(RequestAtom,Data,Function)->
   InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
   if InputResult == true ->
     Function;
@@ -86,14 +90,11 @@ check_input(RequestAtom,Data, Function)->
 
 append_http_code(Result)->
   % tuple 값이 들어오면, 해당부분은 상태코드가 포함된 에러값이 리턴된것이므로, 그대로 반환.
-  if is_tuple(Result)->
-    Result;
-    % binary 값이 들어오면, json 형태의 문자열이 들어온것이므로, 상태코드 200을 포함하여 반환
-    is_binary(Result)->
-      {200,Result};
-    % 예상되지 않은 에러대한 결과코드는 어떤방식으로 ??
-    true->
-      {500,Result}
+  {State,JSON} = Result,
+  case State of
+    error->{400,JSON};
+    ok->{200,JSON};
+    _->{500,jsx:encode([{"result","state is not return"}])}
   end
   .
 
