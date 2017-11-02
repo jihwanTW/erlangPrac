@@ -14,7 +14,9 @@
 
 %% Name,Email,Nickname,Room_idx,User_idx,Read_idx
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% query/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% 친구목록 조회
 query(QueryType,User_idx) when QueryType =:= friend_view->
   SQL =
@@ -34,14 +36,29 @@ query(QueryType,User_idx) when QueryType =:= friend_view->
 query(QueryType,User_idx) when QueryType =:= friend_suggest_view->
   emysql:prepare(friend_suggest_view,<<"SELECT * FROM user join friend_list on user.idx = friend_list.user_idx WHERE friend_list.friend_idx = ?">>),
   emysql:execute(chatting_db,friend_suggest_view,[User_idx]);
+%% 로그인 체크
+query(QueryType, User_id) when QueryType =:= user_login->
+  emysql:prepare(user_login,<<"SELECT * FROM user WHERE id = ?">>),
+  emysql:execute(chatting_db,user_login,[User_id]);
+%% 세션 제거
+query(QueryType, User_idx) when QueryType =:= session_remove->
+  emysql:prepare(session_remove,<<"UPDATE user SET session = NULL WHERE idx=?">>),
+  emysql:execute(chatting_db,session_remove,[User_idx]);
+%% 세션 확인
+query(QueryType, Session) when QueryType =:= check_session->
+  emysql:prepare(check_session,<<"SELECT * FROM user WHERE session=?">>),
+  emysql:execute(chatting_db,check_session,[Session]);
 query(QueryType,_)->
   {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% query/3
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% 방에 유저가 존재하는지 조회
 query(QueryType,Room_idx,User_idx) when QueryType =:= check_room->
   emysql:prepare(check_room,<<"SELECT * FROM room_user WHERE room_idx= ? and user_idx = ?">>),
+  io:format("user idx = ~p ~n",[User_idx]),
   emysql:execute(chatting_db,check_room,[Room_idx,User_idx]);
 %% 닉네임과 이메일 중복 조회
 query(QueryType,Nickname,Email) when QueryType =:= check_duplicate->
@@ -59,11 +76,17 @@ query(QueryType,User_idx,Target_idx) when QueryType =:= friend_remove->
 query(QueryType,User_idx,Target_idx) when QueryType =:= friend_remove_favorites->
   emysql:prepare(remove_favorites,<<"UPDATE friend_list SET favorites_idx = ? WHERE user_idx=? and friend_idx= ?">>),
   emysql:execute(chatting_db,remove_favorites,[0,User_idx,Target_idx]);
+%% 세션 업데이트
+query(QueryType, User_idx,Session) when QueryType =:= session_update->
+  emysql:prepare(session_update,<<"UPDATE user SET session = ? WHERE idx=?">>),
+  emysql:execute(chatting_db,session_update,[Session, User_idx]);
 query(QueryType,_,_)->
   {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% query/4
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% 기존에 대화가 존재할경우, 읽음 카운트만 조회 .
 %% 대화 조회 및 읽음 카운트 감소
 query(QueryType,Room_idx,User_idx,Read_idx) when QueryType =:= view_dialog->
@@ -85,15 +108,14 @@ query(QueryType,Room_idx,User_idx,Read_idx) when QueryType =:= view_dialog->
     [H|_] = Result,
     emysql:prepare(update_dialog_read,<<"UPDATE dialog SET unread_user_num=unread_user_num-1 WHERE idx > ? and room_idx = ?">>),
     emysql:execute(chatting_db,update_dialog_read,[proplists:get_value(<<"dialog_idx">>,H),Room_idx]),
-
     %% 현재까지 카운트 감소된부분 갱신
     emysql:prepare(update_dialog_read,<<"UPDATE read_dialog_idx SET dialog_idx = ?  WHERE room_idx =  ? and user_idx = ?">>),
     emysql:execute(chatting_db,update_dialog_read,[LastDialogIdx,Room_idx,User_idx])
   end,
-
   %% 대화 조회 결과값 전송
   emysql:prepare(view_dialog,<<"SELECT * FROM dialog WHERE room_idx=? and idx > ? limit 0,50">>),
   emysql:execute(chatting_db,view_dialog,[Room_idx,Read_idx]);
+
 %% 대화 전송 및 읽음 카운트 설정
 query(QueryType,User_idx,Room_idx,Dialog) when QueryType =:= send_dialog->
   %% 대화방에 있는 유저수 조회
@@ -104,14 +126,17 @@ query(QueryType,User_idx,Room_idx,Dialog) when QueryType =:= send_dialog->
   %% 대화내용 DB에 삽입
   emysql:prepare(insert_dialog,<<"INSERT INTO dialog (room_idx,user_idx,user_dialog,date_time,unread_user_num) values(?, ?, ?,now(),?)">>),
   emysql:execute(chatting_db,insert_dialog,[Room_idx,User_idx,Dialog,Cnt]);
+
 %% 회원가입
 query(QueryType,Name,Email,Nickname) when QueryType =:= register_user->
   emysql:prepare(register_user,<<"INSERT INTO user (name,email,nickname,date_time,unread_user_num) values(?, ?, ?, now())">>),
   emysql:execute(chatting_db,register_user,[Name,Email,Nickname]);
+
 %% 유저정보 업데이트
 query(QueryType,Email,Nickname,User_idx) when QueryType =:= update_user->
   emysql:prepare(update_user,<<"UPDATE user SET email=?, nickname=? WHERE idx=?">>),
   emysql:execute(chatting_db,update_user,[Email,Nickname,User_idx]);
+
 %% 친구 이름변경
 query(QueryType, User_idx, Target_idx, Change_Name) when QueryType =:= friend_name_update->
   if Change_Name =:= <<"">> ->
@@ -121,10 +146,12 @@ query(QueryType, User_idx, Target_idx, Change_Name) when QueryType =:= friend_na
       emysql:prepare(name_update,<<"UPDATE friend_list SET custom_name=? WHERE user_idx = ? and friend_idx = ?">>),
       emysql:execute(chatting_db,name_update,[Change_Name,User_idx, Target_idx])
     end;
+
 %% 친구 즐겨찾기 추가 or 친구 즐겨찾기 그룹 옮기기
 query(QueryType,User_idx,Target_idx,Favorites_idx) when QueryType =:= friend_add_favorites orelse QueryType =:= friend_favorites_move->
   emysql:prepare(add_favorites,<<"UPDATE friend_list SET favorites_idx = ? WHERE user_idx=? and friend_idx= ?">>),
   emysql:execute(chatting_db,add_favorites,[Favorites_idx,User_idx,Target_idx]);
+
 %% 친구 즐겨찾기 이름변경
 query(QueryType, User_idx, Change_Name,Favorites_idx) when QueryType =:= friend_favorites_name_update->
   % 바뀔 즐겨찾기이름 중복조회
@@ -141,10 +168,15 @@ query(QueryType, User_idx, Change_Name,Favorites_idx) when QueryType =:= friend_
   % 바뀔 그룹으로 update 해당 즐겨찾기 그룹 전체에대한 update
   emysql:prepare(favorites_name_update,<<"UPDATE friend_list,favorites SET friend_list.favorites_idx=favorites.idx WHERE friend_list.user_idx = ? and friend_list.favorites_idx = ? and favorites.favorites_name = ?">>),
   emysql:execute(chatting_db,favorites_name_update,[User_idx,Favorites_idx,Change_Name]);
+
+
 query(QueryType,_,_,_)->
   {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%query 5
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 query(QueryType,_,_,_,_)->
   {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
