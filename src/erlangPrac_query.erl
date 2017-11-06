@@ -44,10 +44,6 @@ query(QueryType, User_id) when QueryType =:= user_login->
 query(QueryType, User_idx) when QueryType =:= session_remove->
   emysql:prepare(session_remove,<<"UPDATE user SET session = NULL WHERE idx=?">>),
   emysql:execute(chatting_db,session_remove,[User_idx]);
-%% 세션 확인
-query(QueryType, Session) when QueryType =:= check_session->
-  emysql:prepare(check_session,<<"SELECT * FROM user WHERE session=?">>),
-  emysql:execute(chatting_db,check_session,[Session]);
 query(QueryType,_)->
   {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
@@ -76,10 +72,6 @@ query(QueryType,User_idx,Target_idx) when QueryType =:= friend_remove->
 query(QueryType,User_idx,Target_idx) when QueryType =:= friend_remove_favorites->
   emysql:prepare(remove_favorites,<<"UPDATE friend_list SET favorites_idx = ? WHERE user_idx=? and friend_idx= ?">>),
   emysql:execute(chatting_db,remove_favorites,[0,User_idx,Target_idx]);
-%% 세션 업데이트
-query(QueryType, User_idx,Session) when QueryType =:= session_update->
-  emysql:prepare(session_update,<<"UPDATE user SET session = ? WHERE idx=?">>),
-  emysql:execute(chatting_db,session_update,[Session, User_idx]);
 query(QueryType,_,_)->
   {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
@@ -182,16 +174,16 @@ query(QueryType,_,_,_,_)->
 .
 
 %% prepare function 과 execute function 이 반복되고있다! 이걸 모듈화시키는게 괜찮은걸까 ?
-execute_query(QueryType,Query,DataList) when is_atom(QueryType),is_binary(Query),is_list(DataList)->
-  emysql:prepare(QueryType,Query),
-  try emysql:execute(chatting_db,QueryType,DataList)
-  catch
-    throw:Why -> {500,jsx:encode([{"result",Why}])};
-    exit:Why -> {500,jsx:encode([{"result",Why}])};
-    error:Why -> {500,jsx:encode([{"result",Why}])}
-  end
-  ;
-execute_query(QueryType,Query,DataList) ->
-  io:format("error  : ~p ~n",[jsx:encode([{"result","query error"},{"query_type",QueryType},{"query",Query},{"data_list",DataList}])]),
-  {500,jsx:encode([{"error","query error check server log!"}])}
-.
+%%execute_query(QueryType,Query,DataList) when is_atom(QueryType),is_binary(Query),is_list(DataList)->
+%%  emysql:prepare(QueryType,Query),
+%%  try emysql:execute(chatting_db,QueryType,DataList)
+%%  catch
+%%    throw:Why -> {500,jsx:encode([{"result",Why}])};
+%%    exit:Why -> {500,jsx:encode([{"result",Why}])};
+%%    error:Why -> {500,jsx:encode([{"result",Why}])}
+%%  end
+%%  ;
+%%execute_query(QueryType,Query,DataList) ->
+%%  io:format("error  : ~p ~n",[jsx:encode([{"result","query error"},{"query_type",QueryType},{"query",Query},{"data_list",DataList}])]),
+%%  {500,jsx:encode([{"error","query error check server log!"}])}
+%%.

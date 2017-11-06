@@ -41,61 +41,61 @@ handle(<<"user">>,<<"login">>,_,Data) ->
 %% 유저 정보 업데이트
 handle(<<"user">>,<<"update">>,_,Data) ->
   Function = fun(_Data) -> erlangPrac_user:user_update(_Data) end,
-  Result = check_session(user_update,Function,Data),
+  Result = check(user_update,Function,Data),
   append_http_code(Result);
 %% 유저 로그아웃
 handle(<<"user">>,<<"logout">>,_,Data) ->
   Function = fun(_Data) -> erlangPrac_user:user_logout(_Data) end,
-  Result = check_session(user_logout,Function,Data),
+  Result = check(user_logout,Function,Data),
   append_http_code(Result);
 
 %% 유저 대화관련 함수
 handle(<<"user">>,<<"dialog">>,<<"send">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:dialog_send(_Data) end,
-  Result = check_session(dialog_send,Function,Data),
+  Result = check(dialog_send,Function,Data),
   append_http_code(Result);
 handle(<<"user">>,<<"dialog">>,<<"view">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:dialog_view(_Data) end,
-  Result = check_session(dialog_view,Function,Data),
+  Result = check(dialog_view,Function,Data),
   append_http_code(Result);
 
 %% 친구 관련 함수
 handle(<<"user">>,<<"friend">>,<<"add">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:friend_add(_Data) end,
-  Result = check_session(friend_add,Function,Data),
+  Result = check(friend_add,Function,Data),
   append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"remove">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:friend_remove(_Data) end,
-  Result = check_session(friend_remove,Function,Data),
+  Result = check(friend_remove,Function,Data),
   append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"view">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:friend_view(_Data) end,
-  Result = check_session(friend_view,Function,Data),
+  Result = check(friend_view,Function,Data),
   append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"suggest_view">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:friend_suggest_view(_Data) end,
-  Result = check_session(friend_suggest_view,Function,Data),
+  Result = check(friend_suggest_view,Function,Data),
   append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"name_update">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:friend_name_update(_Data) end,
-  Result = check_session(friend_name_update,Function,Data),
+  Result = check(friend_name_update,Function,Data),
   append_http_code(Result);
 
 handle(<<"user">>,<<"friend">>,<<"add_favorites">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:friend_add_favorites(_Data) end,
-  Result = check_session(friend_add_favorites,Function,Data),
+  Result = check(friend_add_favorites,Function,Data),
   append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"remove_favorites">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:friend_remove_favorites(_Data) end,
-  Result = check_session(friend_remove_favorites,Function,Data),
+  Result = check(friend_remove_favorites,Function,Data),
   append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"favorites_name_update">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:friend_favorites_name_update(_Data) end,
-  Result = check_session(friend_favorites_name_update,Function,Data),
+  Result = check(friend_favorites_name_update,Function,Data),
   append_http_code(Result);
 handle(<<"user">>,<<"friend">>,<<"favorites_move">>,Data) ->
   Function = fun(_Data) -> erlangPrac_user:favorite_move(_Data) end,
-  Result = check_session(favorite_move,Function,Data),
+  Result = check(favorite_move,Function,Data),
   append_http_code(Result);
 handle(_,_,_,_)->
   {404,jsx:encode([{<<"result">>,<<"undefined url">>}])}.
@@ -106,9 +106,9 @@ check_input(RequestAtom,Data)->
   InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
   case InputResult of
     true->
-          true;
+      {ok,'_'};
     _->
-      InputResult
+      {error,InputResult}
   end
   .
 %% 세션키를 필요로하지않는 경우의 체크함수
@@ -134,22 +134,39 @@ append_http_code(Result)->
   .
 
 %% 세션값이 유효한지를 체크하는 함수
-check_session(QueryType,Function,Data)->
-  CheckResult =  check_input(QueryType,Data),
+%%check(QueryType,Function,Data)->
+%%  CheckResult =  check_input(QueryType,Data),
+%%  case CheckResult of
+%%    true ->
+%%      Session = proplists:get_value(<<"session">>,Data),
+%%      Result = erlangPrac_session:check_session(Session),
+%%      case Result of
+%%        {error,_} ->
+%%          {error,jsx:encode([{<<"result">>,<<"Invalid session">>}])};
+%%        _->
+%%          {ok,User_idx}= Result,
+%%          Function({User_idx,Data})
+%%      end;
+%%    _->
+%%      CheckResult
+%%  end.
+
+check(QueryType,Function,Data)->
+  CheckResult = check_input(QueryType,Data),
   case CheckResult of
-    true ->
+    {ok,_} ->
       Session = proplists:get_value(<<"session">>,Data),
-      io:format("~p ~n",[Session]),
-      Result = emysql_util:as_json(erlangPrac_query:query(check_session,Session)),
+      Result = erlangPrac_session:check_session(Session),
       case Result of
-        [] ->
-          {error,jsx:encode([{<<"result">>,<<"Invalid session">>}])};
+        {error,_} ->
+          Result;
         _->
-          [SessionData] = Result,
-          Function({SessionData,Data})
+          {ok,User_idx}= Result,
+          Function({User_idx,Data})
       end;
       _->
         CheckResult
-  end.
+  end
+  .
 
 terminate(_Reason,_Req,_State)->ok.

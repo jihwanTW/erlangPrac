@@ -41,25 +41,26 @@ user_login(Data)->
   User_id = proplists:get_value(<<"user_id">>,Data),
   %% 아이디 존재여부 체크
   %% 성공여부 반환
-  % 이 방식으로 하면 여러개의 결과값이 조회될 경우 에러가 발생할수 있으니, 검색 결과가 단일성이 보장되는 쿼리문에만 사용할것!
-  [Result] = emysql_util:as_json(erlangPrac_query:query(user_login, User_id)),
+  Result = emysql_util:as_json(erlangPrac_query:query(user_login, User_id)),
   case Result of
     []->
       {error,jsx:encode([{<<"result">>,<<"id is not exist">>}])};
     _->
       % create session key
-      Session = new_session(User_id),
       % update session key
-      User_idx = proplists:get_value(<<"idx">>,Result),
-      erlangPrac_query:query(session_update,User_idx,Session),
+      [Result1]= Result,
+      User_idx = proplists:get_value(<<"idx">>,Result1),
+      Session = erlangPrac_session:new_session(User_idx,User_id),
+      Pid = spawn(erlangPrac_session,session_timer,[now()]),
+      erlangPrac_session:save_session({Session,User_idx,pid_to_list(Pid)}),
+      erlang:send_after(1000,Pid,{check}),
       % return session key
       {ok,jsx:encode([{<<"session">>,Session}])}
   end
 .
 
 %% 유저 정보변경
-user_update({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+user_update({User_idx,Data})->
   Email = proplists:get_value(<<"email">>,Data),
   Nickname = proplists:get_value(<<"nickname">>,Data),
   %% 중복닉네임 , 이메일 체크,
@@ -77,8 +78,7 @@ user_update({SessionData,Data})->
 
 
 %% 유저 로그아웃
-user_logout({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+user_logout({User_idx,_})->
   Result = erlangPrac_query:query(session_remove,User_idx),
   case Result#ok_packet.affected_rows of
     0->
@@ -89,9 +89,8 @@ user_logout({SessionData,Data})->
   .
 
 %% 대화보내기
-dialog_send({SessionData,Data}) ->
+dialog_send({User_idx,Data}) ->
   % 방에 유저가 존재하는지여부 조회
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
   Room_idx = proplists:get_value(<<"room_idx">>,Data),
   Dialog = proplists:get_value(<<"dialog">>,Data),
   {_,_,_,Result,_} = erlangPrac_query:query(check_room,Room_idx,User_idx),
@@ -105,9 +104,8 @@ dialog_send({SessionData,Data}) ->
       {ok,jsx:encode([{<<"result">>,<<"send dialog">>}])}
   end.
 %% 대화 조회 .
-dialog_view({SessionData,Data}) ->
+dialog_view({User_idx,Data}) ->
   % 방에 유저가 존재하는지여부 조회
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
   Room_idx = proplists:get_value(<<"room_idx">>,Data),
   Read_idx = proplists:get_value(<<"read_idx">>,Data),
   {_,_,_,Result,_} = erlangPrac_query:query(check_room,Room_idx,User_idx),
@@ -123,68 +121,49 @@ dialog_view({SessionData,Data}) ->
   end.
 
 %% 친구 신청
-friend_add({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+friend_add({User_idx,Data})->
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
   erlangPrac_query:query(friend_add,User_idx,Target_idx),
   {ok,jsx:encode([{<<"result">>,<<"friend add">>}])}.
-friend_remove({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+friend_remove({User_idx,Data})->
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
   erlangPrac_query:query(friend_remove,User_idx,Target_idx),
   {ok,jsx:encode([{<<"result">>,<<"friend remove">>}])}.
 %% 친구 리스트 보기
-friend_view({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+friend_view({User_idx,_})->
   {ok,jsx:encode(emysql_util:as_json(erlangPrac_query:query(friend_view,User_idx)))}.
-%% 친구 요청 리스트 보기
-friend_suggest_view({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+%% 친구가 되어있는 추천친구 확인하기
+friend_suggest_view({User_idx,_})->
   {ok,jsx:encode(emysql_util:as_json(erlangPrac_query:query(friend_suggest_view,User_idx)))}.
 
-friend_add_favorites({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+friend_add_favorites({User_idx,Data})->
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
   Favorites_idx = proplists:get_value(<<"favorites_idx">>,Data),
   erlangPrac_query:query(friend_add_favorites,Favorites_idx,User_idx,Target_idx),
   {ok,jsx:encode([{<<"result">>,<<"add friends">>}])}.
 
-friend_remove_favorites({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+friend_remove_favorites({User_idx,Data})->
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
   erlangPrac_query:query(friend_remove_favorites,User_idx,Target_idx),
   {ok,jsx:encode([{<<"result">>,<<"remove friends">>}])}.
 
-friend_name_update({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+friend_name_update({User_idx,Data})->
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
   Change_name = proplists:get_value(<<"change_name">>,Data),
   erlangPrac_query:query(friend_name_update,User_idx,Target_idx,Change_name),
   {ok,jsx:encode([{<<"result">>,<<"update friends name">>}])}.
 
-friend_favorites_name_update({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+friend_favorites_name_update({User_idx,Data})->
   Favorites_name = proplists:get_value(<<"favorites_name">>,Data),
   Favorites_idx = proplists:get_value(<<"favorites_idx">>,Data),
   erlangPrac_query:query(friend_favorites_name_update,User_idx,Favorites_name,Favorites_idx),
   {ok,jsx:encode([{<<"result">>,<<"update friends favorites name">>}])}.
 
-friend_favorites_move({SessionData,Data})->
-  User_idx = proplists:get_value(<<"idx">>,SessionData),
+friend_favorites_move({User_idx,Data})->
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
   Favorites_idx = proplists:get_value(<<"favorites_idx">>,Data),
   erlangPrac_query:query(friend_favorites_move,User_idx,Target_idx,Favorites_idx),
   {ok,jsx:encode([{<<"result">>,<<"update friends favorites name">>}])}.
 
 
-%% 세션 생성
-new_session(Id)->
-  random:seed(now()),
-  Num = random:uniform(10000),
-
-  Hash=erlang:phash2(Id),
-
-  List = io_lib:format("~.16B~.16B",[Hash,Num]),
-  list_to_binary(lists:append(List))
-  .
 

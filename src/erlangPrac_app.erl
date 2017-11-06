@@ -58,6 +58,9 @@ start(_StartType, _StartArgs) ->
       {encoding,utf8}
     ]),
 
+  % ets 설정
+  ets:new(session,[public,named_table]),
+
   %% Cowboy의 Router를 설정함
   Dispatch = cowboy_router:compile([
     { '_',[
