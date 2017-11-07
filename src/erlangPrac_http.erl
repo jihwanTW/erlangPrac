@@ -20,10 +20,22 @@ handle(Req,State)->
   {Api,Req1} = cowboy_req:binding(api,Req),
   {What,Req2} = cowboy_req:binding(what,Req1),
   {Opt,Req3} = cowboy_req:binding(opt,Req2),
-  %% 데이터 로딩
-  {ok, [{Data,_}],Req4} = cowboy_req:body_qs(Req3),
-
-  {HttpStateCode,Reply}= handle(Api,What,Opt,jsx:decode(Data)),
+  % 데이터 로딩
+  {ok, [{JsonData,_}],Req4} = cowboy_req:body_qs(Req3),
+  % JSON 형태로 들어온 데이터 decode
+  DecodeData = jsx:decode(JsonData),
+  % 인풋데이터 존재여부와 세션키를 필요로하면 세션값체크
+  CheckResult = erlangPrac_check_input:check_input({Api,What,Opt},DecodeData),
+  % api 호출
+  FunctionResult= case CheckResult of
+                    {ok,'_'}->
+                      handle(Api,What,Opt,DecodeData);
+                    {ok,User_idx}->
+                      handle(Api,What,Opt,{User_idx,DecodeData});
+                    {error,_}->CheckResult
+  end,
+  % http 상태코드 붙임
+  {HttpStateCode,Reply} = append_http_code(FunctionResult),
 
   {ok,Req5} = cowboy_req:reply(HttpStateCode,[
     {<<"content-type">>,<<"text/plain">>}
@@ -32,95 +44,46 @@ handle(Req,State)->
 
 %% 유저 가입
 handle(<<"user">>,<<"register">>,_,Data) ->
-  Result = check_input(user_register,Data, erlangPrac_user:user_register(Data)),
-  append_http_code(Result);
+  erlangPrac_user:user_register(Data);
 %% 유저 로그인
 handle(<<"user">>,<<"login">>,_,Data) ->
-  Result = check_input(user_login,Data, erlangPrac_user:user_login(Data)),
-  append_http_code(Result);
+  erlangPrac_user:user_login(Data);
 %% 유저 정보 업데이트
 handle(<<"user">>,<<"update">>,_,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:user_update(_Data) end,
-  Result = check(user_update,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:user_update(Data);
 %% 유저 로그아웃
 handle(<<"user">>,<<"logout">>,_,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:user_logout(_Data) end,
-  Result = check(user_logout,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:user_logout(Data);
 
 %% 유저 대화관련 함수
 handle(<<"user">>,<<"dialog">>,<<"send">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:dialog_send(_Data) end,
-  Result = check(dialog_send,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:dialog_send(Data);
 handle(<<"user">>,<<"dialog">>,<<"view">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:dialog_view(_Data) end,
-  Result = check(dialog_view,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:dialog_view(Data);
 
 %% 친구 관련 함수
 handle(<<"user">>,<<"friend">>,<<"add">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:friend_add(_Data) end,
-  Result = check(friend_add,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:friend_add(Data);
 handle(<<"user">>,<<"friend">>,<<"remove">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:friend_remove(_Data) end,
-  Result = check(friend_remove,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:friend_remove(Data);
 handle(<<"user">>,<<"friend">>,<<"view">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:friend_view(_Data) end,
-  Result = check(friend_view,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:friend_view(Data);
 handle(<<"user">>,<<"friend">>,<<"suggest_view">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:friend_suggest_view(_Data) end,
-  Result = check(friend_suggest_view,Function,Data),
-  append_http_code(Result);
+  rlangPrac_user:friend_suggest_view(Data);
 handle(<<"user">>,<<"friend">>,<<"name_update">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:friend_name_update(_Data) end,
-  Result = check(friend_name_update,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:friend_name_update(Data);
 
 handle(<<"user">>,<<"friend">>,<<"add_favorites">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:friend_add_favorites(_Data) end,
-  Result = check(friend_add_favorites,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:friend_add_favorites(Data);
 handle(<<"user">>,<<"friend">>,<<"remove_favorites">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:friend_remove_favorites(_Data) end,
-  Result = check(friend_remove_favorites,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:friend_remove_favorites(Data);
 handle(<<"user">>,<<"friend">>,<<"favorites_name_update">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:friend_favorites_name_update(_Data) end,
-  Result = check(friend_favorites_name_update,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:friend_favorites_name_update(Data);
 handle(<<"user">>,<<"friend">>,<<"favorites_move">>,Data) ->
-  Function = fun(_Data) -> erlangPrac_user:favorite_move(_Data) end,
-  Result = check(favorite_move,Function,Data),
-  append_http_code(Result);
+  erlangPrac_user:favorite_move(Data);
 handle(_,_,_,_)->
   {404,jsx:encode([{<<"result">>,<<"undefined url">>}])}.
 
-
-%% 세션키를 필요로하는 경우에 체크함수
-check_input(RequestAtom,Data)->
-  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
-  case InputResult of
-    true->
-      {ok,'_'};
-    _->
-      {error,InputResult}
-  end
-  .
-%% 세션키를 필요로하지않는 경우의 체크함수
-check_input(RequestAtom,Data,Function)->
-  InputResult = erlangPrac_check_input:check_input(RequestAtom,Data),
-  case InputResult of
-    true->
-      Function;
-    _->
-      InputResult
-  end
-.
 
 %% http state 코드를 붙이는 함수
 append_http_code(Result)->
@@ -133,40 +96,5 @@ append_http_code(Result)->
   end
   .
 
-%% 세션값이 유효한지를 체크하는 함수
-%%check(QueryType,Function,Data)->
-%%  CheckResult =  check_input(QueryType,Data),
-%%  case CheckResult of
-%%    true ->
-%%      Session = proplists:get_value(<<"session">>,Data),
-%%      Result = erlangPrac_session:check_session(Session),
-%%      case Result of
-%%        {error,_} ->
-%%          {error,jsx:encode([{<<"result">>,<<"Invalid session">>}])};
-%%        _->
-%%          {ok,User_idx}= Result,
-%%          Function({User_idx,Data})
-%%      end;
-%%    _->
-%%      CheckResult
-%%  end.
-
-check(QueryType,Function,Data)->
-  CheckResult = check_input(QueryType,Data),
-  case CheckResult of
-    {ok,_} ->
-      Session = proplists:get_value(<<"session">>,Data),
-      Result = erlangPrac_session:check_session(Session),
-      case Result of
-        {error,_} ->
-          Result;
-        _->
-          {ok,User_idx}= Result,
-          Function({User_idx,Data})
-      end;
-      _->
-        CheckResult
-  end
-  .
 
 terminate(_Reason,_Req,_State)->ok.

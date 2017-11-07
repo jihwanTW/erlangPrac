@@ -14,65 +14,81 @@
 
 %% 유저 정보관련
 %% 유저 가입 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= user_register->
-  check([<<"name">>,<<"email">>,<<"nickname">>],Data);
-%% 유저 정보변경 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= user_update->
-  check([<<"email">>,<<"nickname">>,<<"session">>],Data);
+check_input({<<"user">>,<<"register">>,_},Data)->
+  check_inputData([<<"name">>,<<"email">>,<<"nickname">>],Data);
 %% 유저 로그인 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= user_login->
-  check([<<"user_id">>],Data);
+check_input({<<"user">>,<<"login">>,_},Data)->
+  check_inputData([<<"user_id">>],Data);
+%% 유저 정보변경 데이터 존재여부 체크
+check_input({<<"user">>,<<"update">>,_},Data)->
+  check_inputDataAndSession([<<"email">>,<<"nickname">>,<<"session">>],Data);
 %% 유저 로그아웃 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= user_logout->
-  check([<<"session">>],Data);
+check_input({<<"user">>,<<"logout">>,_},Data)->
+  check_inputDataAndSession([<<"session">>],Data);
 
 %% 대화 관련
 %% 대화조회 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= dialog_view->
-  check([<<"room_idx">>,<<"read_idx">>,<<"session">>],Data);
+check_input({<<"user">>,<<"dialog">>,<<"view">>},Data)->
+  check_inputDataAndSession([<<"room_idx">>,<<"read_idx">>,<<"session">>],Data);
 %% 대화보내기 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= dialog_send->
-  check([<<"room_idx">>,<<"dialog">>,<<"session">>],Data);
+check_input({<<"user">>,<<"dialog">>,<<"send">>},Data)->
+  check_inputDataAndSession([<<"room_idx">>,<<"dialog">>,<<"session">>],Data);
 
 %% 친구관련
 %% 친구추가 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_add->
-  check([<<"target_idx">>,<<"session">>],Data);
+check_input({<<"user">>,<<"friend">>,<<"add">>},Data)->
+  check_inputDataAndSession([<<"target_idx">>,<<"session">>],Data);
 %% 친구삭제 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_remove->
-  check([<<"target_idx">>,<<"session">>],Data);
+check_input({<<"user">>,<<"friend">>,<<"remove">>},Data)->
+  check_inputDataAndSession([<<"target_idx">>,<<"session">>],Data);
 %% 친구목록보기 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_view->
-  check([<<"session">>],Data);
+check_input({<<"user">>,<<"friend">>,<<"view">>},Data)->
+  check_inputDataAndSession([<<"session">>],Data);
 %% 친구요청목록보기 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_suggest_view->
-  check([<<"session">>],Data);
+check_input({<<"user">>,<<"friend">>,<<"suggest_view">>},Data)->
+  check_inputDataAndSession([<<"session">>],Data);
 %% 친구이름 업데이트 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_name_update->
-  check([<<"target_idx">>,<<"change_name">>,<<"session">>],Data);
+check_input({<<"user">>,<<"friend">>,<<"name_update">>},Data)->
+  check_inputDataAndSession([<<"target_idx">>,<<"change_name">>,<<"session">>],Data);
 %% 즐겨찾기에 추가 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_add_favorites->
-  check([<<"favorites_idx">>,<<"target_idx">>,<<"session">>],Data);
+check_input({<<"user">>,<<"friend">>,<<"add_favorites">>},Data)->
+  check_inputDataAndSession([<<"favorites_idx">>,<<"target_idx">>,<<"session">>],Data);
 %% 즐겨찾기에서 제거 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_remove_favorites->
-  check([<<"target_idx">>,<<"session">>],Data);
+check_input({<<"user">>,<<"friend">>,<<"remove_favorites">>},Data)->
+  check_inputDataAndSession([<<"target_idx">>,<<"session">>],Data);
 %% 즐겨찾기 이름변경 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= friend_favorites_name_update->
-  check([<<"favorites_name">>,<<"favorites_idx">>,<<"session">>],Data);
+check_input({<<"user">>,<<"friend">>,<<"favorites_name_update">>},Data)->
+  check_inputDataAndSession([<<"favorites_name">>,<<"favorites_idx">>,<<"session">>],Data);
 %% 즐겨찾기 유저 옮기기 데이터 존재여부 체크
-check_input(QueryType,Data) when QueryType =:= favorites_move->
-  check([<<"target_idx">>,<<"favorites_idx">>,<<"session">>],Data)
+check_input({<<"user">>,<<"friend">>,<<"favorites_move">>},Data)->
+  check_inputDataAndSession([<<"target_idx">>,<<"favorites_idx">>,<<"session">>],Data)
 .
 
 
-check(NeedList,Data)->
+check_inputDataAndSession(NeedList,Data)->
   CheckDef = fun(NeedParam) ->
     proplists:is_defined(NeedParam,Data) == false
     end,
   Result = lists:filter(CheckDef, NeedList),
   case Result of
-    []->true;
+    []->
+      % session key check
+      Session = proplists:get_value(<<"session">>,Data),
+      erlangPrac_session:check_session(Session);
     _->
       {error,jsx:encode([{<<"result">>,<<"Not enough data">>}])}
   end.
 
+
+check_inputData(NeedList,Data)->
+  CheckDef = fun(NeedParam) ->
+    proplists:is_defined(NeedParam,Data) == false
+             end,
+  Result = lists:filter(CheckDef, NeedList),
+  case Result of
+    []->
+      % session key check
+      {ok,'_'};
+    _->
+      {error,jsx:encode([{<<"result">>,<<"Not enough data">>}])}
+  end.
