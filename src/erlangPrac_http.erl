@@ -27,11 +27,15 @@ handle(Req,State)->
   % 인풋데이터 존재여부와 세션키를 필요로하면 세션값체크
   CheckResult = erlangPrac_check_input:check_input({Api,What,Opt},DecodeData),
   % api 호출
-  FunctionResult= case CheckResult of
+  FunctionResult = case CheckResult of
                     {ok,'_'}->
-                      handle(Api,What,Opt,DecodeData);
+                      try handle(Api,What,Opt,DecodeData)
+                      catch _:Why -> {error,jsx:encode([{<<"result">>,Why}])}
+                      end;
                     {ok,User_idx}->
-                      handle(Api,What,Opt,{User_idx,DecodeData});
+                      try handle(Api,What,Opt,{User_idx,DecodeData})
+                      catch _:Why -> {error,jsx:encode([{<<"result">>,Why}])}
+                      end;
                     {error,_}->CheckResult
   end,
   % http 상태코드 붙임

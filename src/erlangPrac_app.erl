@@ -40,9 +40,6 @@ start(_StartType, _StartArgs) ->
   ok = application:start(cowlib),
   ok = application:start(ranch),
   ok = application:start(cowboy),
-  application:start(gproc),
-  application:start(uuid),
-  application:start(cowboy_session),
 
   %% emysql 로딩
   crypto:start(),
@@ -60,6 +57,7 @@ start(_StartType, _StartArgs) ->
 
   % ets 설정
   ets:new(session,[public,named_table]),
+  erlangPrac_session_server:start(),
 
   %% Cowboy의 Router를 설정함
   Dispatch = cowboy_router:compile([

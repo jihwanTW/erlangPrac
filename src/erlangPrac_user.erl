@@ -50,10 +50,7 @@ user_login(Data)->
       % update session key
       [Result1]= Result,
       User_idx = proplists:get_value(<<"idx">>,Result1),
-      Session = erlangPrac_session:new_session(User_idx,User_id),
-      Pid = spawn(erlangPrac_session,session_timer,[now()]),
-      erlangPrac_session:save_session({Session,User_idx,pid_to_list(Pid)}),
-      erlang:send_after(1000,Pid,{check}),
+      {ok,Session} = erlangPrac_session_server:insert({User_id,User_idx}),
       % return session key
       {ok,jsx:encode([{<<"session">>,Session}])}
   end
@@ -78,13 +75,15 @@ user_update({User_idx,Data})->
 
 
 %% 유저 로그아웃
-user_logout({User_idx,_})->
-  Result = erlangPrac_query:query(session_remove,User_idx),
-  case Result#ok_packet.affected_rows of
-    0->
-      {error,jsx:encode([{<<"reseult">>,<<"user idx is not exist or already session destroy">>}])};
+%%Result#ok_packet.affected_rows
+user_logout({_,Data})->
+  Session = proplists:get_value(<<"nickname">>,Data),
+  Result = erlangPrac_session_server:delete(Session),
+  case Result of
+    {ok,_}->
+      {ok,jsx:encode([{<<"result">>,<<"session destroy">>}])};
     _->
-      {ok,jsx:encode([{<<"result">>,<<"session destroy">>}])}
+      {error,jsx:encode([{<<"reseult">>,<<"user idx is not exist or already session destroy">>}])}
   end
   .
 

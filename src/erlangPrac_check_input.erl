@@ -74,7 +74,7 @@ check_inputDataAndSession(NeedList,Data)->
     []->
       % session key check
       Session = proplists:get_value(<<"session">>,Data),
-      erlangPrac_session:check_session(Session);
+      erlangPrac_session_server:lookup(Session);
     _->
       {error,jsx:encode([{<<"result">>,<<"Not enough data">>}])}
   end.
