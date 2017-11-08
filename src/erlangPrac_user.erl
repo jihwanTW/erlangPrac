@@ -77,13 +77,13 @@ user_update({User_idx,Data})->
 %% 유저 로그아웃
 %%Result#ok_packet.affected_rows
 user_logout({_,Data})->
-  Session = proplists:get_value(<<"nickname">>,Data),
+  Session = proplists:get_value(<<"session">>,Data),
   Result = erlangPrac_session_server:delete(Session),
   case Result of
     {ok,_}->
       {ok,jsx:encode([{<<"result">>,<<"session destroy">>}])};
     _->
-      {error,jsx:encode([{<<"reseult">>,<<"user idx is not exist or already session destroy">>}])}
+      {error,jsx:encode([{<<"reseult">>,<<"session is not exist or already session destroy">>}])}
   end
   .
 

@@ -30,11 +30,11 @@ handle(Req,State)->
   FunctionResult = case CheckResult of
                     {ok,'_'}->
                       try handle(Api,What,Opt,DecodeData)
-                      catch _:Why -> {error,jsx:encode([{<<"result">>,Why}])}
+                      catch _:Why -> {error,Why}%{error,jsx:encode([{<<"result">>,Why}])}
                       end;
                     {ok,User_idx}->
                       try handle(Api,What,Opt,{User_idx,DecodeData})
-                      catch _:Why -> {error,jsx:encode([{<<"result">>,Why}])}
+                      catch _:Why -> {error,Why}%{error,jsx:encode([{<<"result">>,Why}])}
                       end;
                     {error,_}->CheckResult
   end,
