@@ -16,7 +16,7 @@
 
 -export([friend_add/1,friend_remove/1,friend_view/1, friend_suggest_view/1,friend_add_favorites/1,friend_remove_favorites/1,friend_favorites_name_update/1,friend_name_update/1,friend_favorites_move/1]).
 
--record(ok_packet, {seq_num, affected_rows, insert_id, status, warning_count, msg}).
+%-record(ok_packet, {seq_num, affected_rows, insert_id, status, warning_count, msg}).
 
 %% proplists:is_defined(key,list)
 %% 유저 가입시키기
@@ -50,7 +50,7 @@ user_login(Data)->
       % update session key
       [Result1]= Result,
       User_idx = proplists:get_value(<<"idx">>,Result1),
-      {ok,Session} = erlangPrac_session_server:insert({User_id,User_idx}),
+      {ok,Session} = erlangPrac_session:insert({User_id,User_idx}),
       % return session key
       {ok,jsx:encode([{<<"session">>,Session}])}
   end
@@ -78,12 +78,14 @@ user_update({User_idx,Data})->
 %%Result#ok_packet.affected_rows
 user_logout({_,Data})->
   Session = proplists:get_value(<<"session">>,Data),
-  Result = erlangPrac_session_server:delete(Session),
+  Result = erlangPrac_session:delete(Session),
   case Result of
     {ok,_}->
-      {ok,jsx:encode([{<<"result">>,<<"session destroy">>}])};
+      %{ok,jsx:encode([{<<"result">>,<<"session destroy">>}])};
+      Result;
     _->
-      {error,jsx:encode([{<<"reseult">>,<<"session is not exist or already session destroy">>}])}
+      Result
+      %{error,jsx:encode([{<<"reseult">>,<<"session is not exist or already session destroy">>}])}
   end
   .
 
