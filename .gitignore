@@ -3,5 +3,5 @@ deps
 ebin
 .idea
 .rebar
-.iml
-.dump
+*.iml
+*.dump
