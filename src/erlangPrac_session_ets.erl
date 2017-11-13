@@ -10,7 +10,7 @@
 -author("Twinny-KJH").
 
 %% API
--export([lookup/2,insert/2,delete/2,init_store/1]).
+-export([lookup/2,insert/2,delete/2,init_store/1,session_timer/3]).
 
 init_store(Pool_id)->
   ets:new(Pool_id,[public,named_table])
@@ -18,11 +18,22 @@ init_store(Pool_id)->
 
 lookup(Pool_id,Session)->
   io:format("lookup in ets PoolId [~p] Session[~p] ~n",[Pool_id,Session]),
-  ets:lookup(Pool_id,Session)
+  Result = ets:lookup(Pool_id,Session),
+  case Result of
+    []->
+      {error,jsx:encode([{<<"result">>,<<"invalid session">>}])};
+    _->
+      [{Session,User_idx,Pid}] = Result,
+      Pid1 = list_to_pid(Pid),
+      Pid1 ! {time},
+      {ok,User_idx}
+  end
 .
 
 
-insert(Pool_id,{Session,User_idx,Pid})->
+insert(Pool_id,{Session,User_idx})->
+  Pid = spawn(?MODULE,session_timer,[now(),Pool_id,Session]),
+  erlang:send_after(1000,Pid,{check}),
   ets:insert(Pool_id,{Session,User_idx,pid_to_list(Pid)}),
   Pool_id
 .
@@ -42,3 +53,27 @@ delete(Pool_id,Session)->
       {ok,jsx:encode([{<<"result">>,<<"logout">>}])}
   end
 .
+
+
+
+session_timer(Time,Pool_id,Session)->
+  Time1 =
+    receive
+      {time}->
+        now();
+      {check}->
+        Diff = timer:now_diff(now(),Time),
+        case (Diff > 60*1000*1000) of
+          true->
+            io:format("session destroy : ~p ~n",[Session]),
+            delete(Pool_id,Session);
+          _-> erlang:send_after(1000,self(),{check})
+        end,
+        Time;
+      {stop}->
+        io:format("Session Stop : ~p ~n",[Session]),
+        exit(normal);
+      _->
+        Time
+    end,
+  session_timer(Time1,Pool_id,Session).

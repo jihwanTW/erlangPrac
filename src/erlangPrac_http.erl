@@ -42,7 +42,7 @@ handle(Req,State)->
   {HttpStateCode,Reply} = append_http_code(FunctionResult),
 
   {ok,Req5} = cowboy_req:reply(HttpStateCode,[
-    {<<"content-type">>,<<"text/plain">>}
+    {<<"content-type">>,<<"application/json">>}
   ], Reply,Req4),
   {ok,Req5,State}.
 

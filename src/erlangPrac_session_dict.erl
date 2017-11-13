@@ -12,7 +12,7 @@
 -behaviour(gen_server).
 
 %% API
--export([lookup/2,insert/2,delete/2,init_store/1]).
+-export([lookup/2,insert/2,delete/2,init_store/1,session_timer/3]).
 
 
 -export([start_link/0]).
@@ -37,26 +37,39 @@ init([]) ->
 
 init_store(Pool_id)-> gen_server:call(?MODULE,{init,Pool_id}).
 
-lookup(Dict_id,Session)-> gen_server:call(?MODULE,{lookup,Dict_id,Session}).
-insert(Pool_id,{Session,User_idx,Pid})-> gen_server:call(?MODULE,{insert, Pool_id,{Session,User_idx,Pid}}).
+lookup(Pool_id,Session)-> gen_server:call(?MODULE,{lookup, Pool_id,Session}).
+insert(Pool_id,{Session,User_idx})-> gen_server:call(?MODULE,{insert, Pool_id,{Session,User_idx}}).
 delete(Pool_id,Session)-> gen_server:call(?MODULE,{delete, Pool_id,Session}).
 
 
-
+%% dict 조회
 handle_call({lookup, Pool_id,Session}, _From, Dict_list) ->
   Dict = dict_id_to_dict(Pool_id, Dict_list),
-  Reply = try {User_idx,Pid} = dict:fetch(Session,Dict),
-  [{Session,User_idx,Pid}]
-  catch _:_->[]
-  end,
+  Reply = try Result = dict:fetch(Session,Dict),
+            case Result of
+              {User_idx,Pid}->
+                Pid1 = list_to_pid(Pid),
+                Pid1 ! {time},
+                {ok,User_idx};
+              _->
+                {error,jsx:encode([{<<"result">>,<<"invalid session">>}])}
+            end
+          catch _:_->{error,jsx:encode([{<<"result">>,<<"invalid session">>}])}
+          end,
   {reply, Reply, Dict_list};
 %% dict 에 삽입
-handle_call({insert, Pool_id,{Session,User_idx,Pid}}, _From, Dict_list) ->
+handle_call({insert, Pool_id,{Session,User_idx}}, _From, Dict_list) ->
+  % dict 조회
   Dict = dict_id_to_dict(Pool_id, Dict_list),
+  % process 생성
+  Pid = spawn(?MODULE,session_timer,[now(),Pool_id,Session]),
+  erlang:send_after(1000,Pid,{check}),
+  % dict에 저장
   Dict1 = dict:store(Session,{User_idx,pid_to_list(Pid)},Dict),
-  New_Dict_list = add_dict({Pool_id,Dict1}, Dict_list),
+  New_Dict_list = add_dict_in_list({Pool_id,Dict1}, Dict_list),
   Reply = Pool_id,
   {reply, Reply, New_Dict_list};
+%% dict 에서 삭제
 handle_call({delete, Pool_id,Session}, _From, Dict_list) ->
   Dict = dict_id_to_dict(Pool_id, Dict_list),
   Value = try {User_idx,Pid1} = dict:fetch(Session,Dict),
@@ -74,11 +87,11 @@ handle_call({delete, Pool_id,Session}, _From, Dict_list) ->
       Pid ! {stop},
       % remove value in dict
       NewDict = dict:erase(Session,Dict),
-      {{ok,jsx:encode([{<<"result">>,<<"logout">>}])},add_dict({Pool_id,NewDict},Dict_list)}
+      {{ok,jsx:encode([{<<"result">>,<<"logout">>}])}, add_dict_in_list({Pool_id,NewDict},Dict_list)}
   end,
   {reply, Reply, New_dict_list};
 handle_call({init,Pool_id}, _From, Dict_list) ->
-  New_Dict_list = add_dict({Pool_id,dict:new()}, Dict_list),
+  New_Dict_list = add_dict_in_list({Pool_id,dict:new()}, Dict_list),
   {reply, Pool_id, New_Dict_list}.
 
 handle_cast(_Msg, State) ->
@@ -101,6 +114,30 @@ dict_id_to_dict(Dict_id,State)->
   end
   .
 
-add_dict({Dict_id,Dict},State)->
+add_dict_in_list({Dict_id,Dict},State)->
   dict:store(Dict_id,Dict,State)
 .
+
+
+
+session_timer(Time,Pool_id,Session)->
+  Time1 =
+    receive
+      {time}->
+        now();
+      {check}->
+        Diff = timer:now_diff(now(),Time),
+        case (Diff > 60*1000*1000) of
+          true->
+            io:format("session destroy : ~p ~n",[Session]),
+            delete(Pool_id,Session);
+          _-> erlang:send_after(1000,self(),{check})
+        end,
+        Time;
+      {stop}->
+        io:format("Session Stop : ~p ~n",[Session]),
+        exit(normal);
+      _->
+        Time
+    end,
+  session_timer(Time1,Pool_id,Session).

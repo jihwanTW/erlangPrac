@@ -56,8 +56,10 @@ start(_StartType, _StartArgs) ->
     ]),
 
   % ets 설정
-  erlangPrac_session_dict:start_link(),
-  erlangPrac_session:start_link(erlangPrac_session_dict,session),
+  eredis:start_link(),
+%%  erlangPrac_session_dict:start_link(),
+  erlangPrac_session_redis:start_link(),
+  erlangPrac_session:start_link(erlangPrac_session_redis,session),
 
   %% Cowboy의 Router를 설정함
   Dispatch = cowboy_router:compile([
