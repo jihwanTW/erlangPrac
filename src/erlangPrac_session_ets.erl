@@ -10,7 +10,7 @@
 -author("Twinny-KJH").
 
 %% API
--export([lookup/2,insert/2,delete/2,init_store/1,session_timer/3]).
+-export([lookup/2,insert/2,delete/2,init_store/1,session_timer/2]).
 
 init_store(Pool_id)->
   ets:new(Pool_id,[public,named_table])
@@ -32,7 +32,7 @@ lookup(Pool_id,Session)->
 
 
 insert(Pool_id,{Session,User_idx})->
-  Pid = spawn(?MODULE,session_timer,[now(),Pool_id,Session]),
+  Pid = spawn(?MODULE,session_timer,[Pool_id,Session]),
   erlang:send_after(1000,Pid,{check}),
   ets:insert(Pool_id,{Session,User_idx,pid_to_list(Pid)}),
   Pool_id
@@ -56,24 +56,17 @@ delete(Pool_id,Session)->
 
 
 
-session_timer(Time,Pool_id,Session)->
-  Time1 =
+session_timer(Pool_id,Session)->
     receive
       {time}->
         now();
-      {check}->
-        Diff = timer:now_diff(now(),Time),
-        case (Diff > 60*1000*1000) of
-          true->
-            io:format("session destroy : ~p ~n",[Session]),
-            delete(Pool_id,Session);
-          _-> erlang:send_after(1000,self(),{check})
-        end,
-        Time;
       {stop}->
         io:format("Session Stop : ~p ~n",[Session]),
         exit(normal);
       _->
-        Time
+        pass
+    after 1000*60*60 ->
+      io:format("session destroy : ~p ~n",[Session]),
+      delete(Pool_id,Session)
     end,
-  session_timer(Time1,Pool_id,Session).
+  session_timer(Pool_id,Session).

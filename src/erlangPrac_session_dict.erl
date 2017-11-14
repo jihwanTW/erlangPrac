@@ -12,7 +12,7 @@
 -behaviour(gen_server).
 
 %% API
--export([lookup/2,insert/2,delete/2,init_store/1,session_timer/3]).
+-export([lookup/2,insert/2,delete/2,init_store/1,session_timer/2]).
 
 
 -export([start_link/0]).
@@ -62,8 +62,7 @@ handle_call({insert, Pool_id,{Session,User_idx}}, _From, Dict_list) ->
   % dict 조회
   Dict = dict_id_to_dict(Pool_id, Dict_list),
   % process 생성
-  Pid = spawn(?MODULE,session_timer,[now(),Pool_id,Session]),
-  erlang:send_after(1000,Pid,{check}),
+  Pid = spawn(?MODULE,session_timer,[Pool_id,Session]),
   % dict에 저장
   Dict1 = dict:store(Session,{User_idx,pid_to_list(Pid)},Dict),
   New_Dict_list = add_dict_in_list({Pool_id,Dict1}, Dict_list),
@@ -120,24 +119,17 @@ add_dict_in_list({Dict_id,Dict},State)->
 
 
 
-session_timer(Time,Pool_id,Session)->
-  Time1 =
+session_timer(Pool_id,Session)->
     receive
       {time}->
         now();
-      {check}->
-        Diff = timer:now_diff(now(),Time),
-        case (Diff > 60*1000*1000) of
-          true->
-            io:format("session destroy : ~p ~n",[Session]),
-            delete(Pool_id,Session);
-          _-> erlang:send_after(1000,self(),{check})
-        end,
-        Time;
       {stop}->
         io:format("Session Stop : ~p ~n",[Session]),
         exit(normal);
       _->
-        Time
+        pass
+    after 1000*10->
+      io:format("session destroy : ~p ~n",[Session]),
+      delete(Pool_id,Session)
     end,
-  session_timer(Time1,Pool_id,Session).
+  session_timer(Pool_id,Session).
