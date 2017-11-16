@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 25. 10월 2017 오후 4:10
 %%%-------------------------------------------------------------------
--module(erlangPrac_query).
+-module(erlangPrac_mysql_query).
 -author("Twinny-KJH").
 
 %% API
@@ -36,16 +36,43 @@ query(QueryType,User_idx) when QueryType =:= friend_view->
 query(QueryType,User_idx) when QueryType =:= friend_suggest_view->
   emysql:prepare(friend_suggest_view,<<"SELECT * FROM user join friend_list on user.idx = friend_list.user_idx WHERE friend_list.friend_idx = ?">>),
   emysql:execute(chatting_db,friend_suggest_view,[User_idx]);
+%% 유저정보 조회
+query(QueryType,Target_idx) when QueryType =:= user_info->
+  io:format("info : ~p ~n",[Target_idx]),
+  Redis_result = erlangPrac_query_redis:get_user(Target_idx),
+  case Redis_result of
+    {ok,undefined}->
+      % redis에 등록이 안되있으므로 db조회
+      emysql:prepare(user_info,<<"SELECT * FROM user WHERE idx = ?">>),
+      Mysql_result = emysql_util:as_json(emysql:execute(chatting_db,user_info,[Target_idx])),
+      %redis에 등록
+      case Mysql_result of
+        []->
+          {ok,jsx:encode([{<<"result">>,<<"undefined value">>}])};
+        _->
+          erlangPrac_query_redis:insert(Mysql_result),
+          %db 조회결과 반환
+          io:format("check in mysql ~p ~n",[Redis_result]),
+          [Result] = Mysql_result,
+          {ok,jsx:encode(Result)}
+      end;
+    {ok,_}->
+      io:format("check in redis ~p ~n",[Redis_result]),
+      {ok,RedisVal}=Redis_result,
+      {ok,jsx:encode(erlangPrac_customJson:redis2json(RedisVal))};
+    _->
+      io:format("error this point ~p ~n",[Redis_result]),
+      {error,jsx:encode([{<<"result">>,<<"error in user_info . case Redis_result : _">>}])}
+  end;
 %% 로그인 체크
+%% redis로 활용불가. 최초로 접속하는부분임.
 query(QueryType, User_id) when QueryType =:= user_login->
   emysql:prepare(user_login,<<"SELECT * FROM user WHERE id = ?">>),
-  emysql:execute(chatting_db,user_login,[User_id]);
-%% 세션 제거
-query(QueryType, User_idx) when QueryType =:= session_remove->
-  emysql:prepare(session_remove,<<"UPDATE user SET session = NULL WHERE idx=?">>),
-  emysql:execute(chatting_db,session_remove,[User_idx]);
+  Result = emysql:execute(chatting_db,user_login,[User_id]),
+  erlangPrac_query_redis:login(emysql_util:as_json(Result)),
+  Result;
 query(QueryType,_)->
-  {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
+  {error,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -57,6 +84,7 @@ query(QueryType,Room_idx,User_idx) when QueryType =:= check_room->
   io:format("user idx = ~p ~n",[User_idx]),
   emysql:execute(chatting_db,check_room,[Room_idx,User_idx]);
 %% 닉네임과 이메일 중복 조회
+%% redis 로 활용 불가. 검색범위가 너무 넓음.
 query(QueryType,Nickname,Email) when QueryType =:= check_duplicate->
   emysql:prepare(check_user,<<"SELECT * FROM user WHERE email=? or nickname=? ">>),
   emysql:execute(chatting_db,check_user,[Email,Nickname]);
@@ -73,7 +101,7 @@ query(QueryType,User_idx,Target_idx) when QueryType =:= friend_remove_favorites-
   emysql:prepare(remove_favorites,<<"UPDATE friend_list SET favorites_idx = ? WHERE user_idx=? and friend_idx= ?">>),
   emysql:execute(chatting_db,remove_favorites,[0,User_idx,Target_idx]);
 query(QueryType,_,_)->
-  {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
+  {error,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -125,7 +153,8 @@ query(QueryType,Name,Email,Nickname) when QueryType =:= register_user->
   emysql:execute(chatting_db,register_user,[Name,Email,Nickname]);
 
 %% 유저정보 업데이트
-query(QueryType,Email,Nickname,User_idx) when QueryType =:= update_user->
+query(QueryType,User_idx,Email,Nickname) when QueryType =:= update_user->
+  erlangPrac_query_redis:update({User_idx,Email,Nickname}),
   emysql:prepare(update_user,<<"UPDATE user SET email=?, nickname=? WHERE idx=?">>),
   emysql:execute(chatting_db,update_user,[Email,Nickname,User_idx]);
 
@@ -163,14 +192,14 @@ query(QueryType, User_idx, Change_Name,Favorites_idx) when QueryType =:= friend_
 
 
 query(QueryType,_,_,_)->
-  {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
+  {error,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%query 5
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 query(QueryType,_,_,_,_)->
-  {500,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
+  {error,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
 
 %% prepare function 과 execute function 이 반복되고있다! 이걸 모듈화시키는게 괜찮은걸까 ?

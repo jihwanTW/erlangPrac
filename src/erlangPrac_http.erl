@@ -28,13 +28,17 @@ handle(Req,State)->
   CheckResult = erlangPrac_check_input:check_input({Api,What,Opt},DecodeData),
   % api 호출
   FunctionResult = case CheckResult of
-                    {ok,'_'}->
+                    {ok,undefined}->
                       try handle(Api,What,Opt,DecodeData)
-                      catch _:Why -> {error,Why}%{error,jsx:encode([{<<"result">>,Why}])}
+                      catch T:Why ->
+                        io:format("Why(no session) : [~p] ~p~n~p ~n",[T,Why,erlang:get_stacktrace()]),
+                        {error,jsx:encode([{<<"result">>,<<"check error log">>}])}
                       end;
                     {ok,User_idx}->
                       try handle(Api,What,Opt,{User_idx,DecodeData})
-                      catch _:Why -> {error,Why}%{error,jsx:encode([{<<"result">>,Why}])}
+                      catch T:Why ->
+                        io:format("Why(no session) : [~p] ~p~n~p ~n",[T,Why,erlang:get_stacktrace()]),
+                        {error,jsx:encode([{<<"result">>,<<"check error log">>}])}
                       end;
                     {error,_}->CheckResult
   end,
@@ -58,6 +62,9 @@ handle(<<"user">>,<<"update">>,_,Data) ->
 %% 유저 로그아웃
 handle(<<"user">>,<<"logout">>,_,Data) ->
   erlangPrac_user:user_logout(Data);
+%% 유저 로그아웃
+handle(<<"user">>,<<"info">>,_,Data) ->
+  erlangPrac_user:user_info(Data);
 
 %% 유저 대화관련 함수
 handle(<<"user">>,<<"dialog">>,<<"send">>,Data) ->

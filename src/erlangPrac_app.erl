@@ -57,8 +57,12 @@ start(_StartType, _StartArgs) ->
 
   % ets 설정
   eredis:start_link(),
+  % 쿼리용 레디스 프로세스 시작
+  erlangPrac_query_redis:start_link(),
 %%  erlangPrac_session_dict:start_link(),
+  % 세션 관리용 레디스 프로세스 시작
   erlangPrac_session_redis:start_link(),
+  % 세션 관리 프로세스 시작
   erlangPrac_session:start_link(erlangPrac_session_redis,session),
 
   %% Cowboy의 Router를 설정함

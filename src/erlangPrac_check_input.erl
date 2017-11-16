@@ -19,6 +19,9 @@ check_input({<<"user">>,<<"register">>,_},Data)->
 %% 유저 로그인 데이터 존재여부 체크
 check_input({<<"user">>,<<"login">>,_},Data)->
   check_inputData([<<"user_id">>],Data);
+%% 유저 정보 보기 체크
+check_input({<<"user">>,<<"info">>,_},Data)->
+  check_inputDataAndSession([<<"target_idx">>],Data);
 %% 유저 정보변경 데이터 존재여부 체크
 check_input({<<"user">>,<<"update">>,_},Data)->
   check_inputDataAndSession([<<"email">>,<<"nickname">>,<<"session">>],Data);
@@ -93,7 +96,7 @@ check_inputData(NeedList,Data)->
   case Result of
     []->
       % session key check
-      {ok,'_'};
+      {ok,undefined};
     _->
       {error,jsx:encode([{<<"result">>,<<"Not enough data">>}])}
   end.
