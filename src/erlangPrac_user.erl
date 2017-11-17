@@ -10,23 +10,23 @@
 -author("Twinny-KJH").
 
 %% API
--export([user_register/1, user_update/1,user_login/1,user_logout/1,user_info/1]).
+-export([user_register/1,user_withdrawal/1, user_update/1,user_login/1,user_logout/1,user_info/1,user_room_leave/1]).
 
 -export([dialog_send/1, dialog_view/1]).
 
 -export([friend_add/1,friend_remove/1,friend_view/1, friend_suggest_view/1,friend_add_favorites/1,friend_remove_favorites/1,friend_favorites_name_update/1,friend_name_update/1,friend_favorites_move/1]).
 
-%-record(ok_packet, {seq_num, affected_rows, insert_id, status, warning_count, msg}).
+-include("sql_result_records.hrl").
 
-%% proplists:is_defined(key,list)
 %% 유저 가입시키기
 user_register(Data) ->
   % 닉네임과 이메일 중복체크
   Name=proplists:get_value(<<"name">>,Data),
   Email=proplists:get_value(<<"email">>,Data),
   Nickname=proplists:get_value(<<"nickname">>,Data),
-  {_,_,_,Result,_} =  erlangPrac_mysql_query:query(check_duplicate,Nickname,Email),
-  case Result of
+  % 중복검사
+  Result = erlangPrac_mysql_query:query(check_duplicate,Nickname,Email),
+  case Result#result_packet.rows of
     [] ->
       % 디비에 데이터 추가.
       erlangPrac_mysql_query:query(register_user,Name,Email,Nickname),
@@ -35,6 +35,26 @@ user_register(Data) ->
       % 중복되므로, Duplicate 메세지 전달
       {ok,jsx:encode([{<<"result">>,<<"Duplicate">>}])}
   end.
+%% 회원 탈퇴
+user_withdrawal({User_idx,_Data})->
+  % 현재 들어가있는 room_idx 모두 가져옴
+  Room_lists = emysql_util:as_json(erlangPrac_mysql_query:query(all_room,User_idx)),
+  % 해당 room_idx 를 기반으로 하여 모든 방에있는 읽음카운트를 올림
+  View_all_dialog = fun(Room_list)-> erlangPrac_mysql_query:query(view_dialog,proplists:get_value(<<"room_idx">>,Room_list),User_idx,0)
+                    end,
+  lists:map(View_all_dialog, Room_lists),
+  % 해당방들을 나가고 읽음 카운트 삭제
+  Leave_all_room = fun(Room_list)->
+    erlangPrac_mysql_query:query(user_room_leave, User_idx,proplists:get_value(<<"room_idx">>,Room_list))
+                    end,
+  lists:map(Leave_all_room, Room_lists),
+  % 미구현 동작 ~
+  % 일정삭제 및 공유된정보 삭제
+
+  % 회원 유저정보를 remove = true 로 바꿈.
+  RemoveResult = erlangPrac_mysql_query:query(user_withdrawal,User_idx),
+  {ok,jsx:encode([{<<"result">>,RemoveResult#ok_packet.affected_rows}])}
+.
 
 %% 유저 로그인
 user_login(Data)->
@@ -86,6 +106,19 @@ user_info({_,Data})->
   erlangPrac_mysql_query:query(user_info, Target_idx)
   .
 
+%% 방 나가기 및 읽음카운트 삭제
+user_room_leave({User_idx,Data})->
+  case dialog_view({User_idx,Data}) of
+    {ok,_}->
+      % 해당방에서 유저번호 삭제
+      Room_idx = proplists:get_value(<<"room_idx">>,Data),
+      erlangPrac_mysql_query:query(user_room_leave, User_idx,Room_idx),
+      {ok,jsx:encode([{<<"result">>,<<"leave room">>}])};
+    {error,Result}->
+      {error,Result}
+  end
+.
+
 %% 대화보내기
 dialog_send({User_idx,Data}) ->
   % 방에 유저가 존재하는지여부 조회
@@ -105,7 +138,7 @@ dialog_send({User_idx,Data}) ->
 dialog_view({User_idx,Data}) ->
   % 방에 유저가 존재하는지여부 조회
   Room_idx = proplists:get_value(<<"room_idx">>,Data),
-  Read_idx = proplists:get_value(<<"read_idx">>,Data),
+  Read_idx = proplists:get_value(<<"read_idx">>,Data,0),
   {_,_,_,Result,_} = erlangPrac_mysql_query:query(check_room,Room_idx,User_idx),
   case Result of
     []->
@@ -114,7 +147,6 @@ dialog_view({User_idx,Data}) ->
     _->
       % 현재까지 읽은 dialog idx 를 확인한 후에 그 이후의 데이터에 대해 읽어옴
       DialogResult = erlangPrac_mysql_query:query(view_dialog,Room_idx,User_idx,Read_idx),
-      io:format(<<"view Dialog ~n">>),
       {ok,jsx:encode(emysql_util:as_json(DialogResult))}
   end.
 

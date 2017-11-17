@@ -12,7 +12,7 @@
 -behaviour(gen_server).
 
 %% API
--export([get_user/1,insert/1,login/1,update/1]).
+-export([get_user/1,insert/1,login/1,update/1,delete/1]).
 
 -export([start_link/0]).
 
@@ -36,6 +36,7 @@ init([]) ->
 
 
 get_user(User_idx)->gen_server:call(?MODULE,{get_user,User_idx}).
+delete(User_idx)->gen_server:call(?MODULE,{delete,User_idx}).
 insert(Mysql_result)->gen_server:call(?MODULE,{insert,Mysql_result}).
 login(Mysql_result)->gen_server:call(?MODULE,{login,Mysql_result}).
 update({User_idx,Email,Nickname})->gen_server:call(?MODULE,{update,{User_idx,Email,Nickname}}).
@@ -71,6 +72,9 @@ handle_call({login,[Mysql_result]}, _From, State) ->
                  end,
   lists:map(Insert2redis,Mysql_keys),
   eredis:q(State,["EXPIRE",User_idx,1*30*60]),
+  {reply, ignored, State};
+handle_call({delete,User_idx}, _From, State) ->
+  eredis:q(State,["HDEL",User_idx]),
   {reply, ignored, State};
 handle_call({update,{User_idx,Email,Nickname}}, _From, State) ->
   eredis:q(State,["HDEL",User_idx,email,nickname]),

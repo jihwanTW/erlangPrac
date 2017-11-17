@@ -12,6 +12,8 @@
 %% API
 -export([query/2,query/3,query/4,query/5]).
 
+-include("sql_result_records.hrl").
+
 %% Name,Email,Nickname,Room_idx,User_idx,Read_idx
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -27,23 +29,25 @@ query(QueryType,User_idx) when QueryType =:= friend_view->
      ON        user.idx = friend_list.friend_idx AND
                friend_list.favorites_idx = favorites.idx
      WHERE     friend_list.user_idx = ? AND
-               ( favorites.idx = friend_list.favorites_idx OR friend_list.favorites_idx = 0 )
+               ( favorites.idx = friend_list.favorites_idx OR friend_list.favorites_idx = 0 ) AND
+               user.remove = 'false'
      ORDER BY  friend_list.favorites_idx DESC,
                friend_list.custom_name DESC ",
   emysql:prepare(friend_view, SQL),
   emysql:execute(chatting_db,friend_view,[User_idx]);
 %% 친구가 되어있는 추천친구 확인하기
 query(QueryType,User_idx) when QueryType =:= friend_suggest_view->
-  emysql:prepare(friend_suggest_view,<<"SELECT * FROM user join friend_list on user.idx = friend_list.user_idx WHERE friend_list.friend_idx = ?">>),
+  emysql:prepare(friend_suggest_view,<<"SELECT * FROM user join friend_list on user.idx = friend_list.user_idx WHERE friend_list.friend_idx = ? and user.remove='false'">>),
   emysql:execute(chatting_db,friend_suggest_view,[User_idx]);
 %% 유저정보 조회
+%% return : json encode data
 query(QueryType,Target_idx) when QueryType =:= user_info->
   io:format("info : ~p ~n",[Target_idx]),
   Redis_result = erlangPrac_query_redis:get_user(Target_idx),
   case Redis_result of
     {ok,undefined}->
       % redis에 등록이 안되있으므로 db조회
-      emysql:prepare(user_info,<<"SELECT * FROM user WHERE idx = ?">>),
+      emysql:prepare(user_info,<<"SELECT * FROM user WHERE idx = ? and remove='false'">>),
       Mysql_result = emysql_util:as_json(emysql:execute(chatting_db,user_info,[Target_idx])),
       %redis에 등록
       case Mysql_result of
@@ -67,10 +71,26 @@ query(QueryType,Target_idx) when QueryType =:= user_info->
 %% 로그인 체크
 %% redis로 활용불가. 최초로 접속하는부분임.
 query(QueryType, User_id) when QueryType =:= user_login->
-  emysql:prepare(user_login,<<"SELECT * FROM user WHERE id = ?">>),
+  emysql:prepare(user_login,<<"SELECT * FROM user WHERE id = ? and remove='false'">>),
   Result = emysql:execute(chatting_db,user_login,[User_id]),
-  erlangPrac_query_redis:login(emysql_util:as_json(Result)),
+
+  case Result#result_packet.rows of
+    []->
+      Result;
+    _->
+      erlangPrac_query_redis:login(emysql_util:as_json(Result))
+  end,
   Result;
+%% 유저가 존재하는 모든 방을 가져옴.
+query(QueryType,User_idx) when QueryType =:= all_room ->
+  emysql:prepare(all_room,<<"SELECT room_idx FROM room_user WHERE user_idx = ?">>),
+  emysql:execute(chatting_db,all_room,[User_idx]);
+%% 유저를 탈퇴시킴
+query(QueryType,User_idx) when QueryType =:= user_withdrawal ->
+  emysql:prepare(user_withdrawal,<<"UPDATE user SET remove='true' WHERE idx = ?">>),
+  %% 유저를 redis에서 삭제
+  erlangPrac_query_redis:delete(User_idx),
+  emysql:execute(chatting_db,user_withdrawal,[User_idx]);
 query(QueryType,_)->
   {error,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
@@ -81,25 +101,30 @@ query(QueryType,_)->
 %% 방에 유저가 존재하는지 조회
 query(QueryType,Room_idx,User_idx) when QueryType =:= check_room->
   emysql:prepare(check_room,<<"SELECT * FROM room_user WHERE room_idx= ? and user_idx = ?">>),
-  io:format("user idx = ~p ~n",[User_idx]),
   emysql:execute(chatting_db,check_room,[Room_idx,User_idx]);
 %% 닉네임과 이메일 중복 조회
 %% redis 로 활용 불가. 검색범위가 너무 넓음.
 query(QueryType,Nickname,Email) when QueryType =:= check_duplicate->
-  emysql:prepare(check_user,<<"SELECT * FROM user WHERE email=? or nickname=? ">>),
+  emysql:prepare(check_user,<<"SELECT * FROM user WHERE (email=? or nickname=? ) and remove='false' ">>),
   emysql:execute(chatting_db,check_user,[Email,Nickname]);
 %% 친구 추가
-query(QueryType,User_idx,Target_idx) when QueryType =:= friend_add->
-  emysql:prepare(friend_add,<<"INSERT INTO friend_list (friend_list.user_idx,friend_list.friend_idx,friend_list.custom_name) values (?, ?, (SELECT nickname FROM user WHERE idx = ?)) ">>),
-  emysql:execute(chatting_db,friend_add,[User_idx,Target_idx,Target_idx]);
+query(QueryType,User_idx,Target_id) when QueryType =:= friend_add->
+  emysql:prepare(friend_add,<<"INSERT INTO friend_list (friend_list.user_idx,friend_list.friend_idx,friend_list.custom_name) values (?, (SELECT idx FROM user WHERE id = ?), (SELECT nickname FROM user WHERE id = ?)) ">>),
+  emysql:execute(chatting_db,friend_add,[User_idx,Target_id,Target_id]);
 %% 친구 삭제
 query(QueryType,User_idx,Target_idx) when QueryType =:= friend_remove->
-  emysql:prepare(friend_remove,<<"DELETE FROM friend_list WHERE user_idx = ? and friend_idx = ?">>),
+  emysql:prepare(friend_remove,<<"UPDATE friend_list SET remove='true' WHERE user_idx = ? and friend_idx = ?">>),
   emysql:execute(chatting_db,friend_remove,[User_idx,Target_idx]);
 %% 친구 즐겨찾기 삭제
 query(QueryType,User_idx,Target_idx) when QueryType =:= friend_remove_favorites->
   emysql:prepare(remove_favorites,<<"UPDATE friend_list SET favorites_idx = ? WHERE user_idx=? and friend_idx= ?">>),
   emysql:execute(chatting_db,remove_favorites,[0,User_idx,Target_idx]);
+%% 유저 방 떠남
+query(QueryType,User_idx,Room_idx)  when QueryType =:= user_room_leave->
+  emysql:prepare(user_room_leave,<<"DELETE FROM room_user WHERE room_idx = ? and user_idx = ? ">>),
+  emysql:execute(chatting_db,user_room_leave,[Room_idx,User_idx]),
+  emysql:prepare(user_room_leave,<<"DELETE FROM read_dialog_idx WHERE  room_idx = ? and user_idx = ? ">>),
+  emysql:execute(chatting_db,user_room_leave,[Room_idx,User_idx]);
 query(QueryType,_,_)->
   {error,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
@@ -115,8 +140,8 @@ query(QueryType,Room_idx,User_idx,Read_idx) when QueryType =:= view_dialog->
   Result =emysql_util:as_json(emysql:execute(chatting_db,view_read_dialog_idx,[Room_idx,User_idx])),
 
   %% 읽음 카운트에서 이후의 대화에 대해 카운트를 감소하기 위해, 가장 높은값의 idx를 가져온다.
-  emysql:prepare(update_read_idx,<<"SELECT idx FROM dialog WHERE room_idx=? order by idx desc limit 0,1">>),
-  [H2|_] = emysql_util:as_json(emysql:execute(chatting_db,update_read_idx,[Room_idx])),
+  emysql:prepare(get_dialog_idx,<<"SELECT idx FROM dialog WHERE room_idx=? order by idx desc limit 0,1">>),
+  [H2|_] = emysql_util:as_json(emysql:execute(chatting_db,get_dialog_idx,[Room_idx])),
   LastDialogIdx = proplists:get_value(<<"idx">>,H2),
   case Result of
   []->
@@ -155,7 +180,7 @@ query(QueryType,Name,Email,Nickname) when QueryType =:= register_user->
 %% 유저정보 업데이트
 query(QueryType,User_idx,Email,Nickname) when QueryType =:= update_user->
   erlangPrac_query_redis:update({User_idx,Email,Nickname}),
-  emysql:prepare(update_user,<<"UPDATE user SET email=?, nickname=? WHERE idx=?">>),
+  emysql:prepare(update_user,<<"UPDATE user SET email=?, nickname=? WHERE idx=? and remove='false'">>),
   emysql:execute(chatting_db,update_user,[Email,Nickname,User_idx]);
 
 %% 친구 이름변경

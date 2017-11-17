@@ -16,6 +16,8 @@
 %% 유저 가입 데이터 존재여부 체크
 check_input({<<"user">>,<<"register">>,_},Data)->
   check_inputData([<<"name">>,<<"email">>,<<"nickname">>],Data);
+check_input({<<"user">>,<<"withdrawal">>,_},Data)->
+  check_inputDataAndSession([<<"session">>],Data);
 %% 유저 로그인 데이터 존재여부 체크
 check_input({<<"user">>,<<"login">>,_},Data)->
   check_inputData([<<"user_id">>],Data);
@@ -28,6 +30,9 @@ check_input({<<"user">>,<<"update">>,_},Data)->
 %% 유저 로그아웃 데이터 존재여부 체크
 check_input({<<"user">>,<<"logout">>,_},Data)->
   check_inputDataAndSession([<<"session">>],Data);
+%% 유저 방 떠남
+check_input({<<"user">>,<<"room">>,<<"leave">>},Data)->
+  check_inputDataAndSession([<<"session">>,<<"room_idx">>],Data);
 
 %% 대화 관련
 %% 대화조회 데이터 존재여부 체크
@@ -40,7 +45,7 @@ check_input({<<"user">>,<<"dialog">>,<<"send">>},Data)->
 %% 친구관련
 %% 친구추가 데이터 존재여부 체크
 check_input({<<"user">>,<<"friend">>,<<"add">>},Data)->
-  check_inputDataAndSession([<<"target_idx">>,<<"session">>],Data);
+  check_inputDataAndSession([<<"target_id">>,<<"session">>],Data);
 %% 친구삭제 데이터 존재여부 체크
 check_input({<<"user">>,<<"friend">>,<<"remove">>},Data)->
   check_inputDataAndSession([<<"target_idx">>,<<"session">>],Data);
