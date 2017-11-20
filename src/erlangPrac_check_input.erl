@@ -30,6 +30,9 @@ check_input({<<"user">>,<<"update">>,_},Data)->
 %% 유저 로그아웃 데이터 존재여부 체크
 check_input({<<"user">>,<<"logout">>,_},Data)->
   check_inputDataAndSession([<<"session">>],Data);
+%% 유저 방 초대
+check_input({<<"user">>,<<"room">>,<<"invite">>},Data)->
+  check_inputDataAndSession([<<"session">>,<<"target_idx">>],Data);
 %% 유저 방 떠남
 check_input({<<"user">>,<<"room">>,<<"leave">>},Data)->
   check_inputDataAndSession([<<"session">>,<<"room_idx">>],Data);
@@ -40,7 +43,7 @@ check_input({<<"user">>,<<"dialog">>,<<"view">>},Data)->
   check_inputDataAndSession([<<"room_idx">>,<<"read_idx">>,<<"session">>],Data);
 %% 대화보내기 데이터 존재여부 체크
 check_input({<<"user">>,<<"dialog">>,<<"send">>},Data)->
-  check_inputDataAndSession([<<"room_idx">>,<<"dialog">>,<<"session">>],Data);
+  check_inputDataAndSession([<<"dialog">>,<<"session">>],Data);
 
 %% 친구관련
 %% 친구추가 데이터 존재여부 체크

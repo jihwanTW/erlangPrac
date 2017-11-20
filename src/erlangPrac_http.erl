@@ -71,6 +71,10 @@ handle(<<"user">>,<<"logout">>,_,Data) ->
 %% 유저 정보보기
 handle(<<"user">>,<<"info">>,_,Data) ->
   erlangPrac_user:user_info(Data);
+%% 유저 방초대
+handle(<<"user">>,<<"room">>,<<"invite">>,Data) ->
+  erlangPrac_user:user_room_invite(Data);
+%% 유저 방떠나기
 handle(<<"user">>,<<"room">>,<<"leave">>,Data) ->
   erlangPrac_user:user_room_leave(Data);
 
@@ -137,8 +141,11 @@ handle(<<"user">>,<<"schedule">>,<<"fixed">>,Data) ->
 %% 일정 삭제
 handle(<<"user">>,<<"schedule">>,<<"remove">>,Data) ->
   pass;
-%% 일정 공유
-handle(<<"user">>,<<"schedule">>,<<"share">>,Data) ->
+%% 일정공유 개인 대상
+handle(<<"user">>,<<"schedule">>,<<"share_personal">>,Data) ->
+  pass;
+%% 일정공유 방유저들 대상
+handle(<<"user">>,<<"schedule">>,<<"share_room">>,Data) ->
   pass;
 %% 일정 공유 제거 ( 공유한사람이 해당공유자 제거 )
 handle(<<"user">>,<<"schedule">>,<<"share_remove">>,Data) ->
@@ -148,8 +155,6 @@ handle(<<"user">>,<<"schedule">>,<<"share_hang_up">>,Data) ->
   pass;
 %% 일정 공유 리스트 ( 공유된 유저들 목록 - 마스터 포함 . 마스터는 제거 가능 )
 handle(<<"user">>,<<"schedule">>,<<"share_list">>,Data) ->
-  pass;
-handle(<<"user">>,<<"schedule">>,<<"">>,Data) ->
   pass;
 handle(<<"user">>,<<"schedule">>,<<"">>,Data) ->
   pass;

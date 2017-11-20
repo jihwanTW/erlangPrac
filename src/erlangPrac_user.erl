@@ -10,7 +10,7 @@
 -author("Twinny-KJH").
 
 %% API
--export([user_register/1,user_withdrawal/1, user_update/1,user_login/1,user_logout/1,user_info/1,user_room_leave/1]).
+-export([user_register/1,user_withdrawal/1, user_update/1,user_login/1,user_logout/1,user_info/1,user_room_invite/1,user_room_leave/1]).
 
 -export([dialog_send/1, dialog_view/1]).
 
@@ -68,7 +68,7 @@ user_login(Data)->
     _->
       % create session key
       % update session key
-      [Result1]= Result,
+      [Result1|_]= Result,
       User_idx = proplists:get_value(<<"idx">>,Result1),
       {ok,Session} = erlangPrac_session:insert({User_id,User_idx}),
       % return session key
@@ -82,8 +82,8 @@ user_update({User_idx,Data})->
   Nickname = proplists:get_value(<<"nickname">>,Data),
   %% 중복닉네임 , 이메일 체크,
   %% 성공여부 반환
-  {_,_,_,Result,_} = erlangPrac_mysql_query:query(check_duplicate,Nickname,Email),
-  case Result of
+  Result = erlangPrac_mysql_query:query(check_duplicate,Nickname,Email),
+  case Result#result_packet.rows of
     [] ->
       %% 이메일이나 닉네임이 중복되지 않으면, DB에서 닉네임과 이메일 변경
       erlangPrac_mysql_query:query(update_user, User_idx,Email,Nickname),
@@ -103,7 +103,7 @@ user_logout({_,Data})->
 %% 유저 정보보기
 user_info({_,Data})->
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
-  erlangPrac_mysql_query:query(user_info, Target_idx)
+  {ok,jsx:encode(erlangPrac_mysql_query:query(user_info, Target_idx))}
   .
 
 %% 방 나가기 및 읽음카운트 삭제
@@ -119,16 +119,56 @@ user_room_leave({User_idx,Data})->
   end
 .
 
+user_room_invite({User_idx,Data})->
+  % 피초대자
+  Target_idx = proplists:get_value(<<"target_idx">>,Data),
+  % 방번호 인자로 값을 넘겨주지 않았으면 랜덤값을 받아옴
+  Room_idx = proplists:get_value(<<"room_idx">>,Data,generate_random_int()),
+  %% 초대하는 유저가 방에 존재하는지 여부 조회
+  Result = erlangPrac_mysql_query:query(check_room,Room_idx,User_idx),
+  case Result#result_packet.rows of
+    []->
+      io:format("room make ~n"),
+      % 방에 존재하지 않으므로, 새로운 방을 만듬
+      erlangPrac_mysql_query:query(room_make,Room_idx,User_idx,Target_idx),
+      {ok,jsx:encode([{<<"room_idx">>,Room_idx}])};
+    _->
+      io:format("room invite ~n"),
+      erlangPrac_mysql_query:query(room_invite,Room_idx,Target_idx),
+      {ok,jsx:encode([{<<"room_idx">>,Room_idx}])}
+  end
+.
+
 %% 대화보내기
 dialog_send({User_idx,Data}) ->
   % 방에 유저가 존재하는지여부 조회
-  Room_idx = proplists:get_value(<<"room_idx">>,Data),
+  Room_idx = proplists:get_value(<<"room_idx">>,Data,0),
   Dialog = proplists:get_value(<<"dialog">>,Data),
-  {_,_,_,Result,_} = erlangPrac_mysql_query:query(check_room,Room_idx,User_idx),
-  case Result of
+  Result = erlangPrac_mysql_query:query(check_room,Room_idx,User_idx),
+  case Result#result_packet.rows of
     []->
-      %% 유저가 방에 존재하지 않을경우 , 아래 문자열 전달
-      {error,jsx:encode([{<<"result">>,<<"not exist user in room">>}])};
+      case proplists:is_defined(<<"target_idx">>,Data) of
+        true->
+          Target_idx = proplists:get_value(<<"target_idx">>,Data),
+          Result1 = erlangPrac_mysql_query:query(check_personal_room,User_idx,Target_idx),
+          case Result1#result_packet.rows of
+            []->
+              % 만약, 방이 없고, target_idx 가 같이 넘어온다면, 개인대 개인으로 새롭게 채팅을 보내는 것으로 간주하고 방생성.
+              {ok,Room_idx2} = user_room_invite({User_idx,Data}),
+              Room_idx3 = jsx:decode(Room_idx2),
+              erlangPrac_mysql_query:query(send_dialog,User_idx,proplists:get_value(<<"room_idx">>,Room_idx3),Dialog),
+              {ok,jsx:encode([{<<"result">>,<<"send dialog - make room">>}])};
+            _->
+              % 혹시 방이 존재하는데, 유저가 해당방을 나건거라면, 해당방 생성을 하지 않고 채팅을 보냄.
+              [Result2|_T] = emysql_util:as_json(Result1),
+              Room_idx2 = proplists:get_value(<<"room_idx">>,Result2),
+              erlangPrac_mysql_query:query(send_dialog,User_idx,Room_idx2,Dialog),
+              {ok,jsx:encode([{<<"result">>,<<"send dialog to personal">>}])}
+          end;
+        false ->
+          %% 유저가 방에 존재하지 않을경우 , 아래 문자열 전달
+          {error,jsx:encode([{<<"result">>,<<"not exist user in room">>}])}
+      end;
     _->
       %% 유저가 방에 존재할 경우, 다이얼로그에 추가
       erlangPrac_mysql_query:query(send_dialog,User_idx,Room_idx,Dialog),
@@ -139,8 +179,8 @@ dialog_view({User_idx,Data}) ->
   % 방에 유저가 존재하는지여부 조회
   Room_idx = proplists:get_value(<<"room_idx">>,Data),
   Read_idx = proplists:get_value(<<"read_idx">>,Data,0),
-  {_,_,_,Result,_} = erlangPrac_mysql_query:query(check_room,Room_idx,User_idx),
-  case Result of
+  Result = erlangPrac_mysql_query:query(check_room,Room_idx,User_idx),
+  case Result#result_packet.rows of
     []->
       % 유저가 방에 존재하지 않을경우 , 아래 문자열 전달
       {error,jsx:encode([{<<"result">>,<<"not exist user in room">>}])};
@@ -197,3 +237,9 @@ friend_favorites_move({User_idx,Data})->
 
 
 
+
+generate_random_int()->
+  <<A:32,B:32,C:32>> = crypto:rand_bytes(12),
+  random:seed(A,B,C),
+  random:uniform(2100000000)
+  .

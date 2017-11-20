@@ -48,25 +48,25 @@ query(QueryType,Target_idx) when QueryType =:= user_info->
     {ok,undefined}->
       % redis에 등록이 안되있으므로 db조회
       emysql:prepare(user_info,<<"SELECT * FROM user WHERE idx = ? and remove='false'">>),
-      Mysql_result = emysql_util:as_json(emysql:execute(chatting_db,user_info,[Target_idx])),
+      Mysql_result = emysql:execute(chatting_db,user_info,[Target_idx]),
       %redis에 등록
-      case Mysql_result of
+      case Mysql_result#result_packet.rows of
         []->
-          {ok,jsx:encode([{<<"result">>,<<"undefined value">>}])};
+          [{<<"result">>,<<"undefined value">>}];
         _->
           erlangPrac_query_redis:insert(Mysql_result),
           %db 조회결과 반환
           io:format("check in mysql ~p ~n",[Redis_result]),
-          [Result] = Mysql_result,
-          {ok,jsx:encode(Result)}
+          [Result|_] = Mysql_result#result_packet.rows,
+          emysql_util:as_json(Result)
       end;
     {ok,_}->
       io:format("check in redis ~p ~n",[Redis_result]),
       {ok,RedisVal}=Redis_result,
-      {ok,jsx:encode(erlangPrac_customJson:redis2json(RedisVal))};
+      erlangPrac_customJson:redis2json(RedisVal);
     _->
       io:format("error this point ~p ~n",[Redis_result]),
-      {error,jsx:encode([{<<"result">>,<<"error in user_info . case Redis_result : _">>}])}
+      [{<<"result">>,<<"error in user_info . case Redis_result : _">>}]
   end;
 %% 로그인 체크
 %% redis로 활용불가. 최초로 접속하는부분임.
@@ -125,6 +125,30 @@ query(QueryType,User_idx,Room_idx)  when QueryType =:= user_room_leave->
   emysql:execute(chatting_db,user_room_leave,[Room_idx,User_idx]),
   emysql:prepare(user_room_leave,<<"DELETE FROM read_dialog_idx WHERE  room_idx = ? and user_idx = ? ">>),
   emysql:execute(chatting_db,user_room_leave,[Room_idx,User_idx]);
+query(QueryType,Room_idx,Target_idx)  when QueryType =:= room_invite->
+  emysql:prepare(room_invite,<<"INSERT INTO room_user (room_idx,user_idx) values (?,?)">>),
+  emysql:execute(chatting_db,room_invite,[Room_idx,Target_idx]),
+  emysql:prepare(add_read_dialog_idx,<<"INSERT INTO read_dialog_idx (room_idx,user_idx,dialog_idx) values (?,?,(SELECT idx FROM dialog WHERE room_idx = ? order by idx desc limit 0,1))">>),
+  Result = emysql:execute(chatting_db,add_read_dialog_idx,[Room_idx,Target_idx,Room_idx]),
+  case Result of
+    {error_packet,_,_,_,_}->
+      emysql:prepare(add_read_dialog_idx2,<<"INSERT INTO read_dialog_idx (room_idx,user_idx,dialog_idx) values (?,?,0)">>),
+      emysql:execute(chatting_db,add_read_dialog_idx2,[Room_idx,Target_idx]);
+    {ok_packet,_,_,_,_}->
+      pass
+  end
+  ;
+query(QueryType,User_idx,Target_idx)  when QueryType =:= check_personal_room->
+  Sql = "SELECT * FROM room_user
+            WHERE room_idx
+                IN (SELECT room_idx FROM room_user WHERE user_idx = ?)
+              AND room_idx
+                IN (SELECT room_idx FROM room_user WHERE user_idx = ? )
+              AND room_idx NOT
+                IN (SELECT room_idx FROM room_user WHERE user_idx!=? AND user_idx!=?)",
+  emysql:prepare(check_personal_room,Sql),
+  emysql:execute(chatting_db,check_personal_room,[User_idx,Target_idx,User_idx,Target_idx])
+;
 query(QueryType,_,_)->
   {error,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
 .
@@ -214,6 +238,13 @@ query(QueryType, User_idx, Change_Name,Favorites_idx) when QueryType =:= friend_
   % 바뀔 그룹으로 update 해당 즐겨찾기 그룹 전체에대한 update
   emysql:prepare(favorites_name_update,<<"UPDATE friend_list,favorites SET friend_list.favorites_idx=favorites.idx WHERE friend_list.user_idx = ? and friend_list.favorites_idx = ? and favorites.favorites_name = ?">>),
   emysql:execute(chatting_db,favorites_name_update,[User_idx,Favorites_idx,Change_Name]);
+
+query(QueryType, Room_idx,User_idx,Target_idx) when QueryType =:= room_make->
+  emysql:prepare(room_make,<<"INSERT INTO room_user (room_idx,user_idx) values (?,?),(?,?)">>),
+  emysql:execute(chatting_db,room_make,[Room_idx,User_idx,Room_idx,Target_idx]),
+  emysql:prepare(add_read_dialog_idx,<<"INSERT INTO read_dialog_idx (room_idx,user_idx,dialog_idx) values (?,?,0),(?,?,0)">>),
+  emysql:execute(chatting_db,add_read_dialog_idx,[Room_idx,Target_idx,Room_idx,User_idx])
+;
 
 
 query(QueryType,_,_,_)->
