@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 30. 10월 2017 오후 12:44
 %%%-------------------------------------------------------------------
--module(erlangPrac_check_input).
+-module(check_input_data).
 -author("Twinny-KJH").
 
 %% API
@@ -72,7 +72,38 @@ check_input({<<"user">>,<<"friend">>,<<"favorites_name_update">>},Data)->
   check_inputDataAndSession([<<"favorites_name">>,<<"favorites_idx">>,<<"session">>],Data);
 %% 즐겨찾기 유저 옮기기 데이터 존재여부 체크
 check_input({<<"user">>,<<"friend">>,<<"favorites_move">>},Data)->
-  check_inputDataAndSession([<<"target_idx">>,<<"favorites_idx">>,<<"session">>],Data)
+  check_inputDataAndSession([<<"target_idx">>,<<"favorites_idx">>,<<"session">>],Data);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% share part
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 스케쥴 추가
+check_input({<<"user">>,<<"schedule">>,<<"add">>},Data)->
+  check_inputDataAndSession([<<"start_timestamp">>,<<"end_timestamp">>,<<"subject">>,<<"content">>,<<"alarm">>],Data);
+%% 스케쥴 목록 보기
+check_input({<<"user">>,<<"schedule">>,<<"list">>},Data)->
+  check_inputDataAndSession([],Data);
+%% 일정 수정 / 알람 추가,수정,삭제
+check_input({<<"user">>,<<"schedule">>,<<"fixed">>},Data)->
+  check_inputDataAndSession([<<"shcedule_idx">>],Data);
+%% 일정 삭제
+check_input({<<"user">>,<<"schedule">>,<<"remove">>},Data)->
+  check_inputDataAndSession([<<"shcedule_idx">>],Data);
+%% 일정공유 개인 대상
+check_input({<<"user">>,<<"schedule">>,<<"share_personal">>},Data)->
+  check_inputDataAndSession([<<"schedule_idx">>,<<"target_idx">>],Data);
+%% 일정공유 방유저들 대상
+check_input({<<"user">>,<<"schedule">>,<<"share_room">>},Data)->
+  check_inputDataAndSession([<<"schedule_idx">>,<<"room_idx">>],Data);
+%% 일정 공유 제거 ( 공유한사람이 해당공유자 제거 )
+check_input({<<"user">>,<<"schedule">>,<<"share_remove">>},Data)->
+  check_inputDataAndSession([<<"shcedule_idx">>,<<"target_idx">>],Data);
+%% 일정 공유 끊기 ( 공유된사람이 해당공유 제거 )
+check_input({<<"user">>,<<"schedule">>,<<"share_hang_up">>},Data)->
+  check_inputDataAndSession([<<"schedule_idx">>],Data);
+%% 일정 공유 리스트 ( 공유된 유저들 목록 - 마스터 포함 . 마스터는 제거 가능 )
+check_input({<<"user">>,<<"schedule">>,<<"share_list">>},Data)->
+  check_inputDataAndSession([<<"schedule_idx">>],Data)
 .
 
 

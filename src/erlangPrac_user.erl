@@ -123,7 +123,7 @@ user_room_invite({User_idx,Data})->
   % 피초대자
   Target_idx = proplists:get_value(<<"target_idx">>,Data),
   % 방번호 인자로 값을 넘겨주지 않았으면 랜덤값을 받아옴
-  Room_idx = proplists:get_value(<<"room_idx">>,Data,generate_random_int()),
+  Room_idx = proplists:get_value(<<"room_idx">>,Data, utils:generate_random_int()),
   %% 초대하는 유저가 방에 존재하는지 여부 조회
   Result = erlangPrac_mysql_query:query(check_room,Room_idx,User_idx),
   case Result#result_packet.rows of
@@ -236,10 +236,3 @@ friend_favorites_move({User_idx,Data})->
   {ok,jsx:encode([{<<"result">>,<<"update friends favorites name">>}])}.
 
 
-
-
-generate_random_int()->
-  <<A:32,B:32,C:32>> = crypto:rand_bytes(12),
-  random:seed(A,B,C),
-  random:uniform(2100000000)
-  .

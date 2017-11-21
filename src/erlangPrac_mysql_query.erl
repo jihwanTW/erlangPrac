@@ -91,8 +91,81 @@ query(QueryType,User_idx) when QueryType =:= user_withdrawal ->
   %% 유저를 redis에서 삭제
   erlangPrac_query_redis:delete(User_idx),
   emysql:execute(chatting_db,user_withdrawal,[User_idx]);
+
+
+query(QueryType,[Schedule_idx,User_idx,Start_timestamp,End_timestamp, Subject,Content,Alarm]) when QueryType =:= schedule_add ->
+  Sql = "INSERT INTO schedule
+            (idx,start_timestamp,end_timestamp,subject,content,write_user_idx,last_fixed_timestamp,last_fixed_user_idx,remove)
+          VALUES
+            (?,?,?,?,?,?,now(),?,'false')",
+  emysql:prepare(schedule_add,Sql),
+  Result = emysql:execute(chatting_db,schedule_add,[Schedule_idx,Start_timestamp,End_timestamp,Subject,Content,User_idx,User_idx]),
+  case Result of
+    {ok_packet,_,_,_,_,_,_}->
+      Alarm_tokens = length(string:tokens(binary_to_list(Alarm),";")),
+      case Alarm_tokens of
+        0->
+          pass;
+        _->
+          Sql2 = "INSERT INTO schedule_alarm (schedule_idx,timestamp) VALUES (?,?)",
+          Alarm_map = fun Alarm_inner(List) when List == [] -> [];
+            Alarm_inner([H|T]) ->
+              [Schedule_idx,H| Alarm_inner(T)]
+                      end,
+          io:format("alarm : ~p ~n",[string:tokens(binary_to_list(Alarm),";")]),
+          Alarm_map_result = Alarm_map(string:tokens(binary_to_list(Alarm),";")),
+          Sql_add = fun Sql_inner(Num)when Num<1 -> "";
+            Sql_inner(Num) -> ",(?,?)" ++ Sql_inner(Num-1)
+                    end,
+          Sql3 = Sql2 ++ Sql_add(length(string:tokens(binary_to_list(Alarm),";"))-1),
+          emysql:prepare(alarm_add,Sql3),
+          emysql:execute(chatting_db,alarm_add, Alarm_map_result)
+      end
+    ;
+    {error_packet,_,_,_,_}->
+      % 동일한 idx가 추가되어 에러난것으로 간주하고 , 재호출을함.
+      query(QueryType,[utils:generate_random_int(),User_idx,Start_timestamp,End_timestamp, Subject,Content,Alarm])
+  end,
+  Schedule_idx
+;
+%% 자기자신이 올린 스케쥴 조회
+query(QueryType,[schedule_self,User_idx,Period_unit]) when QueryType=:=schedule_list->
+  Sql = case Period_unit of
+    <<"7">> ->
+      "SELECT * FROM schedule WHERE write_user_idx = ? AND to_days(start_timestamp) >= to_days(sysdate()) AND to_days(start_timestamp) < to_days(sysdate()) + 7";
+    _->
+      %% 기본 30일. 잘못된 날짜입력시도 30일
+      "SELECT * FROM schedule WHERE write_user_idx = ? AND start_timestamp LIKE '2017-11-%'"
+  end,
+  emysql:prepare(schedule_list,Sql),
+  emysql:execute(chatting_db,schedule_list,[User_idx])
+;
+%% 공유된 스케쥴 조회
+query(QueryType,[schedule_shared,User_idx,Period_unit]) when QueryType=:=schedule_list->
+  Sql = case Period_unit of
+          <<"7">> ->
+            "SELECT * FROM schedule WHERE write_user_idx != ? AND idx IN (SELECT schedule_idx FROM schedule_share_authority WHERE share_user_idx=? ) AND to_days(start_timestamp) >= to_days(sysdate()) AND to_days(start_timestamp) < to_days(sysdate()) + 7";
+          _->
+            %% 기본 30일. 잘못된 날짜입력시도 30일
+            "SELECT * FROM schedule WHERE write_user_idx != ? AND idx IN (SELECT schedule_idx FROM schedule_share_authority WHERE share_user_idx=? ) AND start_timestamp LIKE '2017-11-%'"
+        end,
+  emysql:prepare(schedule_list,Sql),
+  emysql:execute(chatting_db,schedule_list,[User_idx,User_idx])
+;
+%% 모든 스케쥴 조회 ( 공유, 자기자신것 포함 )
+query(QueryType,[schedule_all,User_idx,Period_unit]) when QueryType=:=schedule_list->
+  Sql = case Period_unit of
+          <<"7">> ->
+            "SELECT * FROM schedule WHERE write_user_idx = ? OR idx IN (SELECT schedule_idx FROM schedule_share_authority WHERE share_user_idx=? ) AND to_days(start_timestamp) >= to_days(sysdate()) AND to_days(start_timestamp) < to_days(sysdate()) + 7";
+          _->
+            %% 기본 30일. 잘못된 날짜입력시도 30일
+            "SELECT * FROM schedule WHERE write_user_idx = ? OR idx IN (SELECT schedule_idx FROM schedule_share_authority WHERE share_user_idx=? ) AND start_timestamp LIKE '2017-11-%'"
+        end,
+  emysql:prepare(schedule_list,Sql),
+  emysql:execute(chatting_db,schedule_list,[User_idx,User_idx])
+;
 query(QueryType,_)->
-  {error,jsx:encode([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])}
+  ([{<<"result">>,<<"query type error">>},{<<"type">>},{QueryType}])
 .
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

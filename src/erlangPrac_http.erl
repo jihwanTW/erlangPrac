@@ -25,7 +25,7 @@ handle(Req,State)->
   % JSON 형태로 들어온 데이터 decode
   DecodeData = jsx:decode(JsonData),
   % 인풋데이터 존재여부와 세션키를 필요로하면 세션값체크
-  CheckResult = erlangPrac_check_input:check_input({Api,What,Opt},DecodeData),
+  CheckResult = check_input_data:check_input({Api,What,Opt},DecodeData),
   % api 호출
   FunctionResult = case CheckResult of
                     {ok,undefined}->
@@ -134,30 +134,31 @@ handle(<<"user">>,<<"friend">>,<<"favorites_move">>,Data) ->
 %%  > alarm_info (timestamp) ,로 구분하여 사용
 %% +반복여부
 handle(<<"user">>,<<"schedule">>,<<"add">>,Data) ->
-  pass;
+  schedule_api:schedule_add(Data);
+%% 일정 리스트
+handle(<<"user">>,<<"schedule">>,<<"list">>,Data) ->
+  schedule_api:schedule_list(Data);
 %% 일정 수정 / 알람 추가,수정,삭제
 handle(<<"user">>,<<"schedule">>,<<"fixed">>,Data) ->
-  pass;
+  schedule_api:schedule_fixed(Data);
 %% 일정 삭제
 handle(<<"user">>,<<"schedule">>,<<"remove">>,Data) ->
-  pass;
+  schedule_api:schedule_remove(Data);
 %% 일정공유 개인 대상
 handle(<<"user">>,<<"schedule">>,<<"share_personal">>,Data) ->
-  pass;
+  schedule_api:schedule_share_for_personal(Data);
 %% 일정공유 방유저들 대상
 handle(<<"user">>,<<"schedule">>,<<"share_room">>,Data) ->
-  pass;
+  schedule_api:schedule_share_for_room(Data);
 %% 일정 공유 제거 ( 공유한사람이 해당공유자 제거 )
 handle(<<"user">>,<<"schedule">>,<<"share_remove">>,Data) ->
-  pass;
+  schedule_api:schedule_share_remove(Data);
 %% 일정 공유 끊기 ( 공유된사람이 해당공유 제거 )
 handle(<<"user">>,<<"schedule">>,<<"share_hang_up">>,Data) ->
-  pass;
+  schedule_api:schedule_share_hang_up(Data);
 %% 일정 공유 리스트 ( 공유된 유저들 목록 - 마스터 포함 . 마스터는 제거 가능 )
 handle(<<"user">>,<<"schedule">>,<<"share_list">>,Data) ->
-  pass;
-handle(<<"user">>,<<"schedule">>,<<"">>,Data) ->
-  pass;
+  schedule_api:schedule_share_list(Data);
 
 handle(_,_,_,_)->
   {404,jsx:encode([{<<"result">>,<<"undefined url">>}])}.
